@@ -1,6 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { supabase } from "./utils/supabase";
+import { fetchMe } from "./utils/auth";
 import Home from "./pages/Home";
 import Generate from "./pages/Generate";
 import Response from "./pages/Response";
@@ -15,25 +15,10 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // supabase.auth.getSession().then(({ data: { session } }) => {
-    //   setSession(session);
-    //   setLoading(false);
-    // });
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (error) {
-        supabase.auth.signOut();
-        setSession(null);
-      } else {
-        setSession(session);
-      }
-      setLoading(false);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-
-    return () => subscription.unsubscribe();
+    // Restore the session from the stored JWT (verified server-side).
+    fetchMe()
+      .then((user) => setSession(user ? { user } : null))
+      .finally(() => setLoading(false));
   }, []);
 
   if (loading) return (

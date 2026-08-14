@@ -5,7 +5,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
-from langchain_community.embeddings import SentenceTransformerEmbeddings
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
 load_dotenv()
 
@@ -33,8 +33,9 @@ async def answer_question(rfp_text: str, question: str) -> str:
     chunks = splitter.create_documents([rfp_text])
 
     # Step 2: Store in ChromaDB
-    embeddings = SentenceTransformerEmbeddings(
-        model_name="all-MiniLM-L6-v2"
+    embeddings = GoogleGenerativeAIEmbeddings(
+        model="models/gemini-embedding-001",
+        google_api_key=os.getenv("GEMINI_API_KEY")
     )
     vectorstore = Chroma.from_documents(
         documents=chunks,

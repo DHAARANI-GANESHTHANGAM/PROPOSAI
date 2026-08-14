@@ -1,10 +1,37 @@
 services:
   - type: web
-    name: ProposAI-backend
+    name: proposai-backend
     runtime: python
     rootDir: rfp-generator/backend
+    # Embeddings are hosted (Google), so torch/sentence-transformers are not
+    # installed and the service fits in the free plan's 512 MB.
+    plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port 10000
+    # Render injects PORT; binding to it is required or the service is marked unhealthy.
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /
     envVars:
-      - key: PORT
-        value: 10000
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      # Secrets — set these in the Render dashboard, never in this file.
+      - key: MONGODB_URI
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      # Used for the RAG embeddings (models/embedding-001)
+      - key: GEMINI_API_KEY
+        sync: false
+      # Comma-separated Vercel origin(s), e.g. https://proposai.vercel.app
+      - key: FRONTEND_ORIGINS
+        sync: false
+      - key: MONGODB_DB_NAME
+        value: proposai
+      # Generated once by Render and kept stable across deploys.
+      # Changing it signs every user out.
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_TTL_HOURS
+        value: "168"
+      # Don't accept localhost origins in production.
+      - key: DISABLE_LOCAL_CORS
+        value: "1"

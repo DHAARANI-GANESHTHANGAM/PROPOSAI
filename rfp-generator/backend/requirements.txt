@@ -12,8 +12,11 @@ langchain-core
 langchain-text-splitters
 langgraph
 chromadb
-sentence-transformers
-supabase
 slowapi
 python-docx
+pymongo
+motor
+bcrypt
+PyJWT
+email-validator
 

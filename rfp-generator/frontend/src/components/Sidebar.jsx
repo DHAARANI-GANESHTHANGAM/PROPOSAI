@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { supabase } from "../utils/supabase";
+import { logout } from "../utils/auth";
 
 const links = [
   { to: "/",        icon: "⚡", label: "Generate" },
@@ -9,8 +9,8 @@ const links = [
 
 export default function Sidebar({session}) {
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
+  const handleLogout = () => {
+    logout();
   };
   return (
     <aside style={{

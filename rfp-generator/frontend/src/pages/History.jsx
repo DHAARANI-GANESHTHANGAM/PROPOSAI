@@ -1,23 +1,50 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { authFetch } from "../utils/auth";
 
 export default function History() {
   const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState("");
   const navigate = useNavigate();
 
   useEffect(() => {
-    const saved = JSON.parse(localStorage.getItem("rfp_history") || "[]");
-    setHistory(saved);
+    const loadHistory = async () => {
+      try {
+        const res = await authFetch("/api/history");
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.detail || `Could not load history (${res.status})`);
+        }
+        const data = await res.json();
+        setHistory(data.history);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadHistory();
   }, []);
 
   const loadResponse = (item) => {
-    localStorage.setItem("rfp_result", JSON.stringify(item));
+    // Prefer the edited draft the user saved, falling back to the original
+    localStorage.setItem("rfp_result", JSON.stringify({
+      ...item,
+      drafted_response: item.edited || item.drafted_response,
+    }));
     navigate("/response");
   };
 
-  const clearHistory = () => {
-    localStorage.removeItem("rfp_history");
-    setHistory([]);
+  const clearHistory = async () => {
+    setError("");
+    try {
+      const res = await authFetch("/api/history", { method: "DELETE" });
+      if (!res.ok) throw new Error(`Could not clear history (${res.status})`);
+      setHistory([]);
+    } catch (err) {
+      setError(err.message);
+    }
   };
 
   return (
@@ -40,7 +67,20 @@ export default function History() {
         )}
       </div>
 
-      {history.length === 0 ? (
+      {error && (
+        <div style={{ background: "#1a0d0d", border: "1px solid #3a1a1a",
+          borderRadius: "8px", padding: "12px 16px", marginBottom: "20px",
+          color: "#ef4444", fontSize: "13px" }}>
+          ⚠️ {error}
+        </div>
+      )}
+
+      {loading ? (
+        <div style={{ textAlign: "center", padding: "80px 0",
+          color: "#444", fontSize: "14px" }}>
+          Loading your history...
+        </div>
+      ) : history.length === 0 ? (
         <div style={{ textAlign: "center", padding: "80px 0" }}>
           <div style={{ fontSize: "48px", marginBottom: "16px" }}>📁</div>
           <p style={{ color: "#444", fontSize: "15px" }}>No history yet</p>
@@ -56,17 +96,19 @@ export default function History() {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
           {history.map((item, i) => (
-            <div key={i} style={{ background: "#111118",
+            <div key={item.id} style={{ background: "#111118",
               border: "1px solid #1e1e2e", borderRadius: "12px",
               padding: "20px", display: "flex",
               justifyContent: "space-between", alignItems: "center" }}>
               <div>
                 <div style={{ color: "#fff", fontSize: "14px",
                   fontWeight: "500", marginBottom: "4px" }}>
-                  RFP Response #{history.length - i}
+                  {item.filename || `RFP Response #${history.length - i}`}
                 </div>
                 <div style={{ color: "#444", fontSize: "12px" }}>
-                  {item.savedAt}
+                  {item.created_at
+                    ? new Date(item.created_at).toLocaleString()
+                    : ""}
                 </div>
               </div>
               <button onClick={() => loadResponse(item)} style={{

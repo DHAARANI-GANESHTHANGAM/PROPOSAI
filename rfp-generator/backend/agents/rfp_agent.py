@@ -5,7 +5,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
-from langchain_community.embeddings import SentenceTransformerEmbeddings
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
 load_dotenv()
 
@@ -24,8 +24,11 @@ def build_rag_retriever(rfp_text: str):
         chunk_overlap=50
     )
     chunks = splitter.create_documents([rfp_text])
-    embeddings = SentenceTransformerEmbeddings(
-        model_name="all-MiniLM-L6-v2"
+    # Hosted embeddings keep torch (~490 MB) out of the deployment image,
+    # which is what lets this run on Render's free tier.
+    embeddings = GoogleGenerativeAIEmbeddings(
+        model="models/gemini-embedding-001",
+        google_api_key=os.getenv("GEMINI_API_KEY")
     )
     vectorstore = Chroma.from_documents(
         documents=chunks,

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { supabase } from "../utils/supabase";
+import { login, signup } from "../utils/auth";
 
 export default function Landing() {
   const [tab, setTab]         = useState("login");
@@ -11,15 +11,19 @@ export default function Landing() {
 
   const handleSubmit = async () => {
     setLoading(true); setError(""); setSuccess("");
-    if (tab === "login") {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) setError(error.message);
-    } else {
-      const { error } = await supabase.auth.signUp({ email, password });
-      if (error) setError(error.message);
-      else setSuccess("Check your email to confirm your account!");
+    try {
+      if (tab === "login") {
+        await login(email, password);
+      } else {
+        await signup(email, password);
+        setSuccess("Account created! Signing you in...");
+      }
+      // Reload so App re-reads the stored token and mounts the app shell.
+      window.location.href = "/";
+    } catch (err) {
+      setError(err.message);
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const steps = [

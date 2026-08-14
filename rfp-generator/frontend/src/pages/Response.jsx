@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import jsPDF from "jspdf";
+import { authFetch } from "../utils/auth";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -13,6 +14,8 @@ export default function Response() {
   const [edited, setEdited]             = useState("");
   const [tab, setTab]                   = useState("response");
   const [saved, setSaved]               = useState(false);
+  const [saving, setSaving]             = useState(false);
+  const [saveError, setSaveError]       = useState("");
   const [winScore, setWinScore]         = useState(null);
   const navigate                        = useNavigate();
 
@@ -33,11 +36,35 @@ export default function Response() {
     doc.save("proposai-response.pdf");
   };
 
-  const saveToHistory = () => {
-    const history = JSON.parse(localStorage.getItem("rfp_history") || "[]");
-    history.unshift({ ...result, savedAt: new Date().toLocaleString(), edited });
-    localStorage.setItem("rfp_history", JSON.stringify(history));
-    setSaved(true);
+  const saveToHistory = async () => {
+    if (saving || saved) return;
+    setSaving(true);
+    setSaveError("");
+    try {
+      const res = await authFetch("/api/history", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rfp_summary: result.rfp_summary || "",
+          drafted_response: result.drafted_response || "",
+          sections: result.sections || {},
+          win_score: result.win_score || {},
+          filename: result.filename || null,
+          rfp_text: rfpText || null,
+          edited,
+        }),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.detail || `Save failed (${res.status})`);
+      }
+      setSaved(true);
+    } catch (err) {
+      setSaveError(err.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleChat = async () => {
@@ -92,14 +119,16 @@ export default function Response() {
             color: "#888", fontSize: "13px", cursor: "pointer" }}>
             ← New RFP
           </button>
-          <button onClick={saveToHistory} style={{
+          <button onClick={saveToHistory} disabled={saving || saved} style={{
             padding: "9px 16px",
             background: saved ? "#1a2e1a" : "#111118",
             border: `1px solid ${saved ? "#22c55e" : "#1e1e2e"}`,
             borderRadius: "8px",
             color: saved ? "#22c55e" : "#888",
-            fontSize: "13px", cursor: "pointer" }}>
-            {saved ? "✅ Saved" : "💾 Save"}
+            fontSize: "13px",
+            cursor: saving || saved ? "default" : "pointer",
+            opacity: saving ? 0.7 : 1 }}>
+            {saving ? "Saving..." : saved ? "✅ Saved" : "💾 Save"}
           </button>
           <button onClick={exportPDF} style={{
             padding: "9px 16px", background: "#6366f1",
@@ -110,6 +139,15 @@ export default function Response() {
           </button>
         </div>
       </div>
+
+      {/* Save error */}
+      {saveError && (
+        <div style={{ background: "#1a0d0d", border: "1px solid #3a1a1a",
+          borderRadius: "8px", padding: "12px 16px", marginBottom: "20px",
+          color: "#ef4444", fontSize: "13px" }}>
+          ⚠️ {saveError}
+        </div>
+      )}
 
       {/* Tabs */}
       <div style={{ display: "flex", gap: "4px", marginBottom: "20px",
@@ -146,7 +184,8 @@ export default function Response() {
           <p style={{ color: "#555", fontSize: "13px", marginBottom: "12px" }}>
             ✏️ Edit the draft below before exporting
           </p>
-          <textarea value={edited} onChange={(e) => setEdited(e.target.value)}
+          <textarea value={edited}
+            onChange={(e) => { setEdited(e.target.value); setSaved(false); }}
             style={{ width: "100%", height: "560px",
               background: "#111118", border: "1px solid #1e1e2e",
               borderRadius: "12px", padding: "24px", color: "#ccc",

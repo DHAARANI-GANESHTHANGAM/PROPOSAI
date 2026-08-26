@@ -311,3 +311,151 @@ body {
 @media (max-width: 560px) {
   .hide-sm { display: none !important; }
 }
+
+/* ---------------------------------------------------------------
+   App shell — responsive layout
+   The sidebar is a fixed 240px rail on desktop and a slide-in
+   drawer under 900px, so a phone gets the full viewport width and
+   never has to be pinch-zoomed to read the page.
+   --------------------------------------------------------------- */
+
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: #0a0a0f;
+}
+
+.app-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 240px;
+  height: 100vh;
+  height: 100dvh;
+  z-index: 200;
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.app-main {
+  flex: 1;
+  min-width: 0;      /* lets long content shrink instead of forcing a scrollbar */
+  margin-left: 240px;
+}
+
+/* Only exist on small screens. */
+.app-topbar,
+.sidebar-scrim,
+.sidebar-close {
+  display: none;
+}
+
+/* Every page's outer wrapper. Padding shrinks on a phone. */
+.page {
+  width: 100%;
+  padding: 40px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+/* Header rows with a title on the left and buttons on the right. */
+.head-row,
+.btn-row {
+  flex-wrap: wrap;
+}
+
+/* Tab strips scroll sideways instead of stretching the page. */
+.tab-bar {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.tab-bar::-webkit-scrollbar { display: none; }
+.tab-bar > button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.dropzone { padding: 60px 40px; }
+.editor-area { height: 560px; }
+.chat-col { height: 600px; }
+
+@media (max-width: 900px) {
+  .app-main {
+    margin-left: 0;
+    padding-top: 56px;   /* clears the fixed top bar */
+  }
+
+  .app-sidebar {
+    transform: translateX(-100%);
+    width: min(280px, 82vw);
+  }
+  .app-sidebar.is-open {
+    transform: translateX(0);
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.6);
+  }
+
+  .app-topbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    padding: 0 14px;
+    z-index: 150;
+    background: rgba(10, 10, 15, 0.92);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid #1e1e2e;
+  }
+
+  .sidebar-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 180;
+    background: rgba(4, 4, 10, 0.6);
+    border: none;
+    animation: scrim-in 0.2s ease;
+  }
+
+  .sidebar-close {
+    display: block;
+    background: none;
+    border: none;
+    color: #666;
+    font-size: 18px;
+    line-height: 1;
+    padding: 4px 6px;
+    cursor: pointer;
+  }
+
+  .page { padding: 20px 16px 48px; }
+
+  .editor-area {
+    height: 62vh;
+    min-height: 340px;
+  }
+  .chat-col {
+    height: calc(100dvh - 230px);
+    min-height: 380px;
+  }
+}
+
+@media (max-width: 640px) {
+  .stats-grid { grid-template-columns: 1fr; }
+  .dropzone { padding: 36px 16px; }
+}

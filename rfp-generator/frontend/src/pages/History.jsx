@@ -48,9 +48,9 @@ export default function History() {
   };
 
   return (
-    <div style={{ padding: "40px", maxWidth: "860px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between",
-        alignItems: "center", marginBottom: "32px" }}>
+    <div className="page" style={{ maxWidth: "860px" }}>
+      <div className="head-row" style={{ display: "flex", justifyContent: "space-between",
+        alignItems: "center", gap: "16px", marginBottom: "32px" }}>
         <div>
           <h1 style={{ fontSize: "26px", fontWeight: "700",
             color: "#fff", marginBottom: "6px" }}>History</h1>
@@ -96,9 +96,9 @@ export default function History() {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
           {history.map((item, i) => (
-            <div key={item.id} style={{ background: "#111118",
+            <div key={item.id} className="head-row" style={{ background: "#111118",
               border: "1px solid #1e1e2e", borderRadius: "12px",
-              padding: "20px", display: "flex",
+              padding: "20px", display: "flex", gap: "12px",
               justifyContent: "space-between", alignItems: "center" }}>
               <div>
                 <div style={{ color: "#fff", fontSize: "14px",

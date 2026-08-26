@@ -100,11 +100,11 @@ export default function Response() {
   const tabs = ["summary", "response", "sections", "win score", "chat"];
 
   return (
-    <div style={{ padding: "40px", maxWidth: "900px" }}>
+    <div className="page" style={{ maxWidth: "900px" }}>
 
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between",
-        alignItems: "flex-start", marginBottom: "32px" }}>
+      <div className="head-row" style={{ display: "flex", justifyContent: "space-between",
+        alignItems: "flex-start", gap: "16px", marginBottom: "32px" }}>
         <div>
           <h1 style={{ fontSize: "26px", fontWeight: "700", color: "#fff",
             marginBottom: "6px" }}>Your Proposal Response</h1>
@@ -112,7 +112,7 @@ export default function Response() {
             Review, edit, and export your AI-drafted proposal
           </p>
         </div>
-        <div style={{ display: "flex", gap: "8px" }}>
+        <div className="btn-row" style={{ display: "flex", gap: "8px" }}>
           <button onClick={() => navigate("/")} style={{
             padding: "9px 16px", background: "#111118",
             border: "1px solid #1e1e2e", borderRadius: "8px",
@@ -150,7 +150,7 @@ export default function Response() {
       )}
 
       {/* Tabs */}
-      <div style={{ display: "flex", gap: "4px", marginBottom: "20px",
+      <div className="tab-bar" style={{ display: "flex", gap: "4px", marginBottom: "20px",
         background: "#0d0d14", padding: "4px", borderRadius: "8px",
         border: "1px solid #1e1e2e", width: "fit-content" }}>
         {tabs.map((t) => (
@@ -185,8 +185,9 @@ export default function Response() {
             ✏️ Edit the draft below before exporting
           </p>
           <textarea value={edited}
+            className="editor-area"
             onChange={(e) => { setEdited(e.target.value); setSaved(false); }}
-            style={{ width: "100%", height: "560px",
+            style={{ width: "100%",
               background: "#111118", border: "1px solid #1e1e2e",
               borderRadius: "12px", padding: "24px", color: "#ccc",
               fontSize: "14px", lineHeight: "1.8", resize: "none",
@@ -290,7 +291,7 @@ export default function Response() {
 
       {/* Chat Tab */}
       {tab === "chat" && (
-        <div style={{ display: "flex", flexDirection: "column", height: "600px" }}>
+        <div className="chat-col" style={{ display: "flex", flexDirection: "column" }}>
 
           {/* Messages Area */}
           <div style={{ flex: 1, overflowY: "auto", marginBottom: "16px",

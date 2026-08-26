@@ -39,7 +39,7 @@ export default function Profile() {
   ];
 
   return (
-    <div style={{ padding: "40px", maxWidth: "700px" }}>
+    <div className="page" style={{ maxWidth: "700px" }}>
 
       {/* Header */}
       <div style={{ marginBottom: "32px" }}>

@@ -7,29 +7,34 @@ const links = [
   { to: "/history", icon: "📁", label: "History"  },
 ];
 
-export default function Sidebar({session}) {
+export default function Sidebar({ session, open = false, onClose = () => {} }) {
 
   const handleLogout = () => {
     logout();
   };
   return (
-    <aside style={{
-      position: "fixed", top: 0, left: 0,
-      width: "240px", height: "100vh",
+    <aside className={`app-sidebar${open ? " is-open" : ""}`} style={{
       background: "#111118",
       borderRight: "1px solid #1e1e2e",
       display: "flex", flexDirection: "column",
-      padding: "24px 16px", zIndex: 100,
+      padding: "24px 16px", overflowY: "auto",
     }}>
 
       {/* Logo */}
-      <div style={{ marginBottom: "40px", padding: "0 8px" }}>
-        <div style={{ fontSize: "20px", fontWeight: "700", color: "#fff", letterSpacing: "-0.5px" }}>
-          Propos<span style={{ color: "#6366f1" }}>AI</span>
+      <div style={{ marginBottom: "40px", padding: "0 8px", display: "flex",
+        alignItems: "flex-start", justifyContent: "space-between", gap: "8px" }}>
+        <div>
+          <div style={{ fontSize: "20px", fontWeight: "700", color: "#fff", letterSpacing: "-0.5px" }}>
+            Propos<span style={{ color: "#6366f1" }}>AI</span>
+          </div>
+          <div style={{ fontSize: "11px", color: "#555", marginTop: "2px" }}>
+            Proposal Generator
+          </div>
         </div>
-        <div style={{ fontSize: "11px", color: "#555", marginTop: "2px" }}>
-          Proposal Generator
-        </div>
+        {/* Only rendered on small screens (see .sidebar-close in index.css). */}
+        <button type="button" className="sidebar-close" onClick={onClose} aria-label="Close menu">
+          &#10005;
+        </button>
       </div>
 
       {/* Nav Links */}
@@ -39,7 +44,7 @@ export default function Sidebar({session}) {
           MENU
         </div>
         {links.map(({ to, icon, label }) => (
-          <NavLink key={to} to={to} end style={({ isActive }) => ({
+          <NavLink key={to} to={to} end onClick={onClose} style={({ isActive }) => ({
             display: "flex", alignItems: "center", gap: "10px",
             padding: "10px 12px", borderRadius: "8px", marginBottom: "4px",
             textDecoration: "none", fontSize: "14px", fontWeight: "500",

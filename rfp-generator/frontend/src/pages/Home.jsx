@@ -73,7 +73,7 @@ export default function Home() {
   });
 
   return (
-    <div style={{ padding: "40px", maxWidth: "860px" }}>
+    <div className="page" style={{ maxWidth: "860px" }}>
 
       {/* Header */}
       <div style={{ marginBottom: "32px" }}>
@@ -87,8 +87,7 @@ export default function Home() {
       </div>
 
       {/* Stats Row */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)",
-        gap: "12px", marginBottom: "32px" }}>
+      <div className="stats-grid" style={{ marginBottom: "32px" }}>
         {[
           // { label: "AI Sections", value: "3", sub: "Executive, Technical, Timeline" },
           // { label: "Processing Time", value: "~20s", sub: "Using Gemini + RAG" },
@@ -108,7 +107,7 @@ export default function Home() {
       </div>
 
       {/* Tab Switcher */}
-      <div style={{ display: "flex", gap: "4px", marginBottom: "16px",
+      <div className="tab-bar" style={{ display: "flex", gap: "4px", marginBottom: "16px",
         background: "#0d0d14", padding: "4px", borderRadius: "8px",
         border: "1px solid #1e1e2e", width: "fit-content" }}>
         {["upload", "paste"].map((t) => (
@@ -127,9 +126,9 @@ export default function Home() {
       {/* Upload Area */}
       {tab === "upload" && (
         <Card>
-          <div {...getRootProps()} style={{
+          <div {...getRootProps()} className="dropzone" style={{
             border: `2px dashed ${isDragActive ? "#6366f1" : "#1e1e2e"}`,
-            borderRadius: "10px", padding: "60px 40px", textAlign: "center",
+            borderRadius: "10px", textAlign: "center",
             cursor: "pointer", background: isDragActive ? "#13131f" : "transparent",
             transition: "all 0.2s",
           }}>

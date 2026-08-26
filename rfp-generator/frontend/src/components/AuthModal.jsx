@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { login, signup } from "../utils/auth";
+import {
+  validateEmail,
+  validatePassword,
+  suggestEmailFix,
+} from "../utils/validation";
 
 /**
  * The single sign-in / sign-up surface for the whole marketing page.
@@ -16,7 +21,18 @@ export default function AuthModal({ mode = "login", onClose }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  // A field's message stays hidden until it has been blurred or the form has
+  // been submitted, so nobody gets scolded halfway through typing. After that
+  // it updates live as they fix it.
+  const [touched, setTouched] = useState({ email: false, password: false });
   const emailRef = useRef(null);
+  const passwordRef = useRef(null);
+
+  const emailError = validateEmail(email);
+  const passwordError = validatePassword(password);
+  const emailSuggestion = emailError ? "" : suggestEmailFix(email);
+  const showEmailError = touched.email && !!emailError;
+  const showPasswordError = touched.password && !!passwordError;
 
   useEffect(() => setTab(mode), [mode]);
 
@@ -36,19 +52,30 @@ export default function AuthModal({ mode = "login", onClose }) {
     setTab(next);
     setError("");
     setSuccess("");
+    setTouched({ email: false, password: false });
   };
 
   const submit = async (e) => {
     e.preventDefault();
     if (loading) return;
+
+    // Nothing leaves the browser until both fields pass. Reveal every message
+    // at once and put the cursor in the first field that needs work.
+    setTouched({ email: true, password: true });
+    if (emailError || passwordError) {
+      (emailError ? emailRef : passwordRef).current?.focus();
+      return;
+    }
+
     setLoading(true);
     setError("");
     setSuccess("");
+    const cleanEmail = email.trim();
     try {
       if (tab === "login") {
-        await login(email, password);
+        await login(cleanEmail, password);
       } else {
-        await signup(email, password);
+        await signup(cleanEmail, password);
         setSuccess("Account created — signing you in…");
       }
       // Reload so App re-reads the stored token and mounts the app shell.
@@ -176,7 +203,7 @@ export default function AuthModal({ mode = "login", onClose }) {
           ))}
         </div>
 
-        <form onSubmit={submit}>
+        <form onSubmit={submit} noValidate>
           <label
             htmlFor="auth-email"
             style={{
@@ -193,15 +220,50 @@ export default function AuthModal({ mode = "login", onClose }) {
           <input
             id="auth-email"
             ref={emailRef}
-            className="field"
+            className={`field${showEmailError ? " is-invalid" : ""}`}
             type="email"
+            inputMode="email"
             autoComplete="email"
+            autoCapitalize="none"
+            spellCheck="false"
             required
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              setError("");
+            }}
+            onBlur={() => setTouched((t) => ({ ...t, email: true }))}
+            aria-invalid={showEmailError}
+            aria-describedby={showEmailError ? "auth-email-error" : undefined}
             placeholder="you@example.com"
-            style={{ marginBottom: "16px" }}
+            style={{
+              marginBottom: showEmailError || emailSuggestion ? "6px" : "16px",
+            }}
           />
+
+          {showEmailError && (
+            <p id="auth-email-error" role="alert" className="field-error">
+              {emailError}
+            </p>
+          )}
+
+          {/* Non-blocking nudge for the usual domain typos. */}
+          {emailSuggestion && !showEmailError && (
+            <p className="field-hint">
+              Did you mean{" "}
+              <button
+                type="button"
+                className="field-hint-fix"
+                onClick={() => {
+                  setEmail(emailSuggestion);
+                  emailRef.current?.focus();
+                }}
+              >
+                {emailSuggestion}
+              </button>
+              ?
+            </p>
+          )}
 
           <label
             htmlFor="auth-password"
@@ -218,15 +280,41 @@ export default function AuthModal({ mode = "login", onClose }) {
           </label>
           <input
             id="auth-password"
-            className="field"
+            ref={passwordRef}
+            className={`field${showPasswordError ? " is-invalid" : ""}`}
             type="password"
             autoComplete={tab === "login" ? "current-password" : "new-password"}
             required
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              setError("");
+            }}
+            onBlur={() => setTouched((t) => ({ ...t, password: true }))}
+            aria-invalid={showPasswordError}
+            aria-describedby={
+              showPasswordError
+                ? "auth-password-error"
+                : tab === "signup"
+                ? "auth-password-hint"
+                : undefined
+            }
             placeholder="••••••••"
-            style={{ marginBottom: "20px" }}
+            style={{
+              marginBottom:
+                showPasswordError || tab === "signup" ? "6px" : "20px",
+            }}
           />
+
+          {showPasswordError ? (
+            <p id="auth-password-error" role="alert" className="field-error">
+              {passwordError}
+            </p>
+          ) : tab === "signup" ? (
+            <p id="auth-password-hint" className="field-hint">
+              At least 8 characters.
+            </p>
+          ) : null}
 
           {error && (
             <p

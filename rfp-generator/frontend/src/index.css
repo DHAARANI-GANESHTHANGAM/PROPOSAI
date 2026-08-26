@@ -459,3 +459,47 @@ body {
   .stats-grid { grid-template-columns: 1fr; }
   .dropzone { padding: 36px 16px; }
 }
+
+/* ---------------------------------------------------------------
+   Form validation states (auth modal)
+   --------------------------------------------------------------- */
+
+.field.is-invalid {
+  border-color: var(--danger);
+}
+.field.is-invalid:focus {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.16);
+}
+
+.field-error,
+.field-hint {
+  font-size: 12.5px;
+  line-height: 1.45;
+  margin: 0 0 14px;
+}
+
+.field-error {
+  color: var(--danger);
+}
+
+.field-hint {
+  color: var(--text-faint);
+}
+
+/* The "did you mean …" correction, clickable to accept it. */
+.field-hint-fix {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: 600;
+  color: var(--brand-soft);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.field-hint-fix:hover {
+  color: var(--brand);
+}

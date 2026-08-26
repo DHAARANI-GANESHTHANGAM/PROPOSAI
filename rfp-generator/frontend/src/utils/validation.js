@@ -111,6 +111,16 @@ export function validatePassword(raw) {
 }
 
 /**
+ * The second field on the reset page. Checked separately from the password
+ * rules so "too short" and "doesn't match" can't shout at once.
+ */
+export function validatePasswordConfirmation(password, confirmation) {
+  if (!confirmation) return "Re-enter your new password.";
+  if (password !== confirmation) return "Both passwords need to match.";
+  return "";
+}
+
+/**
  * Non-blocking nudge for a mistyped domain. Returns the corrected address, or
  * "" when there's nothing to suggest. The local part keeps its original case.
  */

@@ -18,6 +18,7 @@ MONGODB_DB_NAME = os.getenv("MONGODB_DB_NAME", "proposai")
 
 HISTORY_COLLECTION = "rfp_history"
 USERS_COLLECTION = "users"
+PASSWORD_RESETS_COLLECTION = "password_resets"
 
 _client: AsyncIOMotorClient | None = None
 _db: AsyncIOMotorDatabase | None = None
@@ -62,6 +63,11 @@ async def _ensure_indexes() -> None:
     # Unique index is what actually prevents duplicate signups under a race.
     await _db[USERS_COLLECTION].create_index("email", unique=True)
 
+    # Reset tokens are only ever looked up by hash, and Mongo sweeps them
+    # itself once expires_at passes, so spent links can't pile up.
+    await _db[PASSWORD_RESETS_COLLECTION].create_index("token_hash", unique=True)
+    await _db[PASSWORD_RESETS_COLLECTION].create_index("expires_at", expireAfterSeconds=0)
+
 
 def get_database() -> AsyncIOMotorDatabase:
     """Returns the active database, or None if the connection never came up."""
@@ -80,3 +86,10 @@ def get_users_collection():
     if _db is None:
         return None
     return _db[USERS_COLLECTION]
+
+
+def get_password_resets_collection():
+    """Returns the password_resets collection, or None if MongoDB is unavailable."""
+    if _db is None:
+        return None
+    return _db[PASSWORD_RESETS_COLLECTION]

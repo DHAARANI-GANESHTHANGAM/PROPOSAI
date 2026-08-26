@@ -26,6 +26,18 @@ services:
         sync: false
       - key: MONGODB_DB_NAME
         value: proposai
+      # Password reset email (Brevo REST API — free plans block SMTP ports).
+      - key: BREVO_API_KEY
+        sync: false
+      - key: BREVO_SENDER_EMAIL
+        sync: false
+      - key: BREVO_SENDER_NAME
+        value: ProposAI
+      # Where reset links point, e.g. https://proposai-rho.vercel.app
+      - key: FRONTEND_URL
+        sync: false
+      - key: RESET_TOKEN_TTL_MINUTES
+        value: "30"
       # Generated once by Render and kept stable across deploys.
       # Changing it signs every user out.
       - key: JWT_SECRET

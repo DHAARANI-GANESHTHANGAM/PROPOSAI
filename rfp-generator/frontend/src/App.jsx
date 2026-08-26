@@ -9,6 +9,7 @@ import History from "./pages/History";
 import Sidebar from "./components/Sidebar";
 import Profile from "./pages/Profile";
 import Landing from "./pages/Landing";
+import ResetPassword from "./pages/ResetPassword";
 
 // Paint the saved theme before React renders, so there's no flash of the
 // wrong background on reload.
@@ -63,6 +64,11 @@ export default function App() {
       </div>
     );
 
+  // A reset link has to work for someone who is signed out, and the Router
+  // below only mounts once there's a session — so this one path is matched
+  // against the URL directly, before either branch.
+  if (window.location.pathname === "/reset-password") return <ResetPassword />;
+
   if (!session) return <Landing />;
 
   return (
@@ -114,6 +120,7 @@ export default function App() {
             <Route path="/response" element={<Response />} />
             <Route path="/history" element={<History />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </main>

@@ -16,21 +16,45 @@ async function readError(res, fallback) {
   return body.detail || fallback;
 }
 
-async function submitCredentials(path, email, password) {
-  const res = await fetch(`${API_URL}/api/auth/${path}`, {
+async function postJson(path, body) {
+  const res = await fetch(`${API_URL}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(await readError(res, `Request failed (${res.status})`));
+  return res.json();
+}
 
-  const data = await res.json();
+async function submitCredentials(path, email, password) {
+  const data = await postJson(`/api/auth/${path}`, { email, password });
   setToken(data.access_token);
   return data.user;
 }
 
 export const signup = (email, password) => submitCredentials("signup", email, password);
 export const login  = (email, password) => submitCredentials("login", email, password);
+
+/**
+ * Asks for a reset link. Resolves the same way whether or not the address is
+ * registered — the backend deliberately won't say, so neither can we.
+ */
+export const requestPasswordReset = (email) =>
+  postJson("/api/auth/forgot-password", { email });
+
+/** Is this reset link still good? Lets the page fail fast on a dead link. */
+export const checkResetToken = (token) =>
+  postJson("/api/auth/reset-password/check", { token });
+
+/**
+ * Sets the new password. The backend invalidates every token issued before
+ * this moment, so drop the one in this browser too.
+ */
+export async function resetPassword(token, password) {
+  const data = await postJson("/api/auth/reset-password", { token, password });
+  clearToken();
+  return data;
+}
 
 /** Restores the session on page load. Returns null if the token is missing/expired. */
 export async function fetchMe() {

@@ -9,8 +9,10 @@ from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
 load_dotenv()
 
+# llama-3.3-70b-versatile was decommissioned on Groq (2026-08-16).
+# GROQ_MODEL allows swapping the model from the environment.
 llm = ChatGroq(
-    model="llama-3.3-70b-versatile",
+    model=os.getenv("GROQ_MODEL", "openai/gpt-oss-120b"),
     api_key=os.getenv("GROQ_API_KEY"),
     temperature=0.7
 )

@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: proposai-backend
+    name: proposai-api
     runtime: python
     rootDir: rfp-generator/backend
     # Embeddings are hosted (Google), so torch/sentence-transformers are not

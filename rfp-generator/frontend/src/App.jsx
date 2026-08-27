@@ -64,9 +64,9 @@ export default function App() {
       </div>
     );
 
-  // A reset link has to work for someone who is signed out, and the Router
+  // A reset link has to work for someone who is signed out and the Router
   // below only mounts once there's a session — so this one path is matched
-  // against the URL directly, before either branch.
+  // against the URL directly before either branch.
   if (window.location.pathname === "/reset-password") return <ResetPassword />;
 
   if (!session) return <Landing />;

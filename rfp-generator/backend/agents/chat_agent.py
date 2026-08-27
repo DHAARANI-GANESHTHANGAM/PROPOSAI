@@ -11,11 +11,34 @@ load_dotenv()
 
 # llama-3.3-70b-versatile was decommissioned on Groq (2026-08-16).
 # GROQ_MODEL allows swapping the model from the environment.
-llm = ChatGroq(
-    model=os.getenv("GROQ_MODEL", "openai/gpt-oss-120b"),
-    api_key=os.getenv("GROQ_API_KEY"),
-    temperature=0.3
-)
+_llm = None
+
+
+def get_llm() -> ChatGroq:
+    """
+    Builds the Groq client on first use rather than at import.
+
+    Constructing it at module scope meant a missing GROQ_API_KEY raised during
+    `import main`, so the whole API failed to start — sign-in, history and
+    password reset included — over a key only proposal generation needs. Now
+    the service boots either way and only this feature reports the problem.
+    """
+    global _llm
+
+    if _llm is None:
+        api_key = os.getenv("GROQ_API_KEY")
+        if not api_key:
+            raise RuntimeError(
+                "GROQ_API_KEY is not set, so the AI features are unavailable. "
+                "Add it to the service's environment variables."
+            )
+        _llm = ChatGroq(
+            model=os.getenv("GROQ_MODEL", "openai/gpt-oss-120b"),
+            api_key=api_key,
+            temperature=0.3,
+        )
+
+    return _llm
 
 parser = StrOutputParser()
 
@@ -68,7 +91,7 @@ async def answer_question(rfp_text: str, question: str) -> str:
     Give a clear, direct answer in 2-3 sentences.
     """)
 
-    chain = prompt | llm | parser
+    chain = prompt | get_llm() | parser
     answer = await chain.ainvoke({
         "context": context,
         "question": question

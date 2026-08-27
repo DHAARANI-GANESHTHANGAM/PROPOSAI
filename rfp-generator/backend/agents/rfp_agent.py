@@ -11,11 +11,34 @@ load_dotenv()
 
 # llama-3.3-70b-versatile was decommissioned on Groq (2026-08-16).
 # GROQ_MODEL allows swapping the model from the environment.
-llm = ChatGroq(
-    model=os.getenv("GROQ_MODEL", "openai/gpt-oss-120b"),
-    api_key=os.getenv("GROQ_API_KEY"),
-    temperature=0.7
-)
+_llm = None
+
+
+def get_llm() -> ChatGroq:
+    """
+    Builds the Groq client on first use rather than at import.
+
+    Constructing it at module scope meant a missing GROQ_API_KEY raised during
+    `import main`, so the whole API failed to start — sign-in, history and
+    password reset included — over a key only proposal generation needs. Now
+    the service boots either way and only this feature reports the problem.
+    """
+    global _llm
+
+    if _llm is None:
+        api_key = os.getenv("GROQ_API_KEY")
+        if not api_key:
+            raise RuntimeError(
+                "GROQ_API_KEY is not set, so the AI features are unavailable. "
+                "Add it to the service's environment variables."
+            )
+        _llm = ChatGroq(
+            model=os.getenv("GROQ_MODEL", "openai/gpt-oss-120b"),
+            api_key=api_key,
+            temperature=0.7,
+        )
+
+    return _llm
 
 parser = StrOutputParser()
 
@@ -79,7 +102,7 @@ async def run_rfp_agent(rfp_text: str, profile: dict = {}) -> dict:
     Respond in clear, concise bullet points.
     """)
 
-    summary_chain = summary_prompt | llm | parser
+    summary_chain = summary_prompt | get_llm() | parser
     summary = await summary_chain.ainvoke({"context": summary_context})
 
     # ── Step 2: Executive Summary ──────────────────────────────────────
@@ -101,7 +124,7 @@ async def run_rfp_agent(rfp_text: str, profile: dict = {}) -> dict:
     Write 2-3 paragraphs for the Executive Summary section only.
     """)
 
-    exec_chain = exec_prompt | llm | parser
+    exec_chain = exec_prompt | get_llm() | parser
     executive_summary = await exec_chain.ainvoke({
         "context": exec_context,
         "profile_context": profile_context
@@ -123,7 +146,7 @@ async def run_rfp_agent(rfp_text: str, profile: dict = {}) -> dict:
     Write the Technical Approach section with clear headings and bullet points.
     """)
 
-    tech_chain = tech_prompt | llm | parser
+    tech_chain = tech_prompt | get_llm() | parser
     technical_approach = await tech_chain.ainvoke({"context": tech_context})
 
     # ── Step 4: Timeline & Pricing ─────────────────────────────────────
@@ -142,7 +165,7 @@ async def run_rfp_agent(rfp_text: str, profile: dict = {}) -> dict:
     Write the Timeline and Pricing section only.
     """)
 
-    timeline_chain = timeline_prompt | llm | parser
+    timeline_chain = timeline_prompt | get_llm() | parser
     timeline = await timeline_chain.ainvoke({"context": timeline_context})
 
     # ── Step 5: Combine into full response ─────────────────────────────
@@ -194,7 +217,7 @@ Please review and customize before submission.*
     RECOMMENDATION: [one sentence advice]
     """)
 
-    win_chain = win_score_prompt | llm | parser
+    win_chain = win_score_prompt | get_llm() | parser
     win_raw = await win_chain.ainvoke({
         "context": win_score_context,
         "profile_context": profile_context

@@ -34,7 +34,10 @@ def _collection():
     if collection is None:
         raise HTTPException(
             status_code=503,
-            detail="Database unavailable. Check MONGODB_URI.",
+            # Deliberately vague: the visitor can't act on the real cause, and
+            # naming our environment variables tells them about our internals.
+            # The specific reason is in the server log at startup.
+            detail="Service temporarily unavailable. Please try again in a moment.",
         )
     return collection
 

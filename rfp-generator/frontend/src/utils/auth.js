@@ -98,6 +98,27 @@ export function logout() {
   window.location.href = "/";
 }
 
+/** The signed-in user's company profile, saved server-side. */
+export async function getCompanyProfile() {
+  const res = await authFetch("/api/profile");
+  if (!res.ok) {
+    throw new Error(await readError(res, `Could not load your profile (${res.status})`));
+  }
+  return (await res.json()).profile;
+}
+
+export async function saveCompanyProfile(profile) {
+  const res = await authFetch("/api/profile", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(profile),
+  });
+  if (!res.ok) {
+    throw new Error(await readError(res, `Could not save your profile (${res.status})`));
+  }
+  return (await res.json()).profile;
+}
+
 /** fetch() with the Bearer token attached; bounces to login on 401. */
 export async function authFetch(path, options = {}) {
   const token = getToken();

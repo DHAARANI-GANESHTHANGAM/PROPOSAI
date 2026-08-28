@@ -1,7 +1,8 @@
-import { useState, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
+import { getCompanyProfile } from "../utils/auth";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -19,19 +20,34 @@ export default function Home() {
   const [error, setError]       = useState("");
   const [tab, setTab]           = useState("upload");
   const [pastedText, setPasted] = useState("");
+  // Pulled from the account on mount so a generation started on any device
+  // still carries the company details.
+  const [profile, setProfile]   = useState({});
   const navigate                = useNavigate();
+
+  useEffect(() => {
+    let cancelled = false;
+    getCompanyProfile()
+      .then((saved) => {
+        if (!cancelled) setProfile(saved || {});
+      })
+      .catch(() => {
+        // Not fatal: generating without a profile still works, it's just less
+        // personalised. Don't block the upload on it.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const onDrop = useCallback(async (acceptedFiles) => {
     const file = acceptedFiles[0];
     if (!file) return;
     setLoading(true); setError("");
     try {
-      const companyProfile = localStorage.getItem("company_profile");
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("profile", JSON.stringify(
-        companyProfile ? JSON.parse(companyProfile) : {}
-      ));
+      formData.append("profile", JSON.stringify(profile || {}));
       const res = await axios.post(`${API_URL}/api/generate`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
@@ -54,10 +70,9 @@ export default function Home() {
     setLoading(true); setError("");
     try {
       // const res = await axios.post(`${API_URL}/api/generate-text`, { text: pastedText });
-      const companyProfile = localStorage.getItem("company_profile");
       const res = await axios.post(`${API_URL}/api/generate-text`, {
         text: pastedText,
-        profile: companyProfile ? JSON.parse(companyProfile) : {}
+        profile: profile || {},
       });
       localStorage.setItem("rfp_result", JSON.stringify(res.data));
       navigate("/response");

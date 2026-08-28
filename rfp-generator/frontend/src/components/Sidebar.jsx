@@ -2,7 +2,8 @@ import { NavLink } from "react-router-dom";
 import { logout } from "../utils/auth";
 
 const links = [
-  { to: "/",        icon: "⚡", label: "Generate" },
+  { to: "/",          icon: "⚡", label: "Generate" },
+  { to: "/dashboard", icon: "📊", label: "Dashboard" },
   { to: "/profile", icon: "🏢", label: "Company Profile" },
   { to: "/history", icon: "📁", label: "History"  },
 ];

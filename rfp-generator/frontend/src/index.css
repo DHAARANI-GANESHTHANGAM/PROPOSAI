@@ -503,3 +503,36 @@ body {
 .field-hint-fix:hover {
   color: var(--brand);
 }
+
+/* ---------------------------------------------------------------
+   Dashboard layout
+   --------------------------------------------------------------- */
+
+.dash-split {
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 860px) {
+  .dash-split {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+}
+
+/* The KPI row reuses .stats-grid, which is 3-up. The dashboard has four
+   tiles, so give it its own steps. */
+.page .stats-grid:has(> :nth-child(4)) {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+@media (max-width: 900px) {
+  .page .stats-grid:has(> :nth-child(4)) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .page .stats-grid:has(> :nth-child(4)) {
+    grid-template-columns: 1fr;
+  }
+}

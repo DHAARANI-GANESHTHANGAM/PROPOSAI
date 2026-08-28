@@ -5,6 +5,7 @@ Every route derives user_id from the verified JWT, so a client cannot read
 or delete another user's history by passing a different id.
 """
 
+import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Literal, Optional
 
@@ -17,6 +18,10 @@ from database.mongodb import get_history_collection
 from utils.security import get_current_user
 
 router = APIRouter()
+
+# Worst to best is the order the model is told to choose from. Kept fixed so
+# the dashboard's ordered scale never reshuffles between requests.
+RATING_ORDER = ["Excellent", "Strong", "Moderate", "Challenging"]
 
 
 # A long Q&A thread shouldn't be able to grow a single document without
@@ -154,6 +159,78 @@ async def get_history(
     items = [_to_dict(doc) async for doc in cursor]
 
     return {"count": len(items), "history": items}
+
+
+# Declared before /history/{history_id} on purpose: FastAPI matches routes in
+# order, so "stats" would otherwise be swallowed as a history id.
+@router.get("/history/stats")
+async def history_stats(current_user: dict = Depends(get_current_user)):
+    """
+    Headline numbers for the dashboard, computed from saved proposals.
+
+    Everything here is derived from data already stored. The average is of the
+    AI's *predicted* win score, which is not a win rate — no outcome is ever
+    recorded, so the frontend must not present it as one.
+    """
+    collection = _collection()
+
+    cursor = collection.find(
+        {"user_id": current_user["id"]},
+        {"created_at": 1, "win_score": 1, "title": 1, "filename": 1},
+    ).sort("created_at", -1)
+
+    now = datetime.now(timezone.utc)
+    total = 0
+    this_month = 0
+    scores: list[int] = []
+    ratings: dict[str, int] = {}
+    recent: list[dict] = []
+
+    async for doc in cursor:
+        total += 1
+
+        created = doc.get("created_at")
+        if isinstance(created, datetime):
+            created_utc = created if created.tzinfo else created.replace(tzinfo=timezone.utc)
+            if (created_utc.year, created_utc.month) == (now.year, now.month):
+                this_month += 1
+
+        win = doc.get("win_score") or {}
+
+        # The model is asked for "SCORE: 78" but sometimes returns "78/100" or
+        # a stray word, so pull the first run of digits rather than trusting it.
+        score = None
+        match = re.search(r"\d{1,3}", str(win.get("SCORE", "")))
+        if match:
+            value = int(match.group())
+            if 0 <= value <= 100:
+                score = value
+                scores.append(value)
+
+        rating = str(win.get("RATING", "")).strip()
+        if rating in RATING_ORDER:
+            ratings[rating] = ratings.get(rating, 0) + 1
+
+        if len(recent) < 5:
+            recent.append({
+                "id": str(doc["_id"]),
+                "name": doc.get("title") or doc.get("filename") or "Untitled proposal",
+                "created_at": created_utc.isoformat() if isinstance(created, datetime) else None,
+                "score": score,
+                "rating": rating if rating in RATING_ORDER else None,
+            })
+
+    return {
+        "total": total,
+        "this_month": this_month,
+        # None rather than 0 when nothing is scored — "0" would read as a
+        # terrible average instead of "no data yet".
+        "average_score": round(sum(scores) / len(scores)) if scores else None,
+        "scored_count": len(scores),
+        "strong_count": ratings.get("Excellent", 0) + ratings.get("Strong", 0),
+        "ratings": [{"rating": r, "count": ratings.get(r, 0)} for r in RATING_ORDER],
+        "recent": recent,
+    }
 
 
 @router.get("/history/{history_id}")

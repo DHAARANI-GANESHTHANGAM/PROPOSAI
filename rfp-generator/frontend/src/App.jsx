@@ -9,6 +9,7 @@ import History from "./pages/History";
 import Sidebar from "./components/Sidebar";
 import Profile from "./pages/Profile";
 import Landing from "./pages/Landing";
+import Dashboard from "./pages/Dashboard";
 import ResetPassword from "./pages/ResetPassword";
 
 // Paint the saved theme before React renders, so there's no flash of the
@@ -118,6 +119,7 @@ export default function App() {
             <Route path="/" element={<Home />} />
             <Route path="/generate" element={<Generate />} />
             <Route path="/response" element={<Response />} />
+            <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/history" element={<History />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/reset-password" element={<ResetPassword />} />

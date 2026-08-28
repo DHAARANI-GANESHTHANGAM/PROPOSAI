@@ -4,8 +4,12 @@ import traceback
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+
 from routers import rfp, history, auth, profile, export
 from database.mongodb import connect_to_mongo, close_mongo_connection
+from utils.rate_limit import limiter
 
 
 @asynccontextmanager
@@ -16,6 +20,13 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="RFP Generator API", lifespan=lifespan)
+
+# Rate limiting for the endpoints that cost money on every call.
+# Registered before the CORS middleware below so a 429 still carries the
+# Access-Control-Allow-Origin header and the browser shows the real status
+# instead of a phantom CORS failure.
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Turn unhandled exceptions into a JSON 500 *inside* the CORS middleware.
 # Starlette's default 500 is produced outside it, so it carries no

@@ -1,31 +1,69 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Form
 import json
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+
 from agents.rfp_agent import run_rfp_agent
 from utils.pdf_reader import extract_text
+from utils.rate_limit import CHAT_LIMIT, GENERATE_LIMIT, limiter
+from utils.security import get_current_user
 
 router = APIRouter()
 
+# The free instance has 512 MB. Read in chunks and stop at the ceiling rather
+# than pulling the whole upload into memory and measuring it afterwards.
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+MAX_TEXT_CHARS = 200_000
+CHUNK = 64 * 1024
+
+
+async def _read_capped(file: UploadFile) -> bytes:
+    chunks = []
+    total = 0
+
+    while True:
+        chunk = await file.read(CHUNK)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > MAX_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"That file is larger than {MAX_UPLOAD_BYTES // (1024 * 1024)} MB.",
+            )
+        chunks.append(chunk)
+
+    return b"".join(chunks)
+
+
 @router.post("/generate")
-async def generate_rfp_response(file: UploadFile = File(...), profile: str = Form("{}")):
+@limiter.limit(GENERATE_LIMIT)
+async def generate_rfp_response(
+    request: Request,
+    file: UploadFile = File(...),
+    profile: str = Form("{}"),
+    current_user: dict = Depends(get_current_user),
+):
     """
-    Accepts an RFP PDF file, extracts text,
+    Accepts an RFP document, extracts text,
     runs the AI agent, and returns a drafted response.
     """
-    # Step 1: Make sure it's a PDF
     allowed = [".pdf", ".docx", ".doc", ".txt"]
     if not any(file.filename.lower().endswith(ext) for ext in allowed):
         raise HTTPException(status_code=400, detail="Only PDF, DOCX, DOC, and TXT files are accepted.")
 
-    # Step 2: Read and extract text from PDF
-    contents = await file.read()
+    contents = await _read_capped(file)
     rfp_text = extract_text(contents, file.filename)
 
     if not rfp_text:
-        raise HTTPException(status_code=400, detail="Could not extract text from PDF.")
+        raise HTTPException(status_code=400, detail="Could not extract text from that file.")
 
-    # Step 3: Run the AI agent
-    profile_data = json.loads(profile)
-    result = await run_rfp_agent(rfp_text, profile_data)
+    try:
+        profile_data = json.loads(profile) if profile else {}
+    except json.JSONDecodeError:
+        # A malformed profile shouldn't cost the user their upload.
+        profile_data = {}
+
+    result = await run_rfp_agent(rfp_text[:MAX_TEXT_CHARS], profile_data)
 
     return {
         "filename": file.filename,
@@ -37,7 +75,12 @@ async def generate_rfp_response(file: UploadFile = File(...), profile: str = For
 
 
 @router.post("/generate-text")
-async def generate_from_text(data: dict):
+@limiter.limit(GENERATE_LIMIT)
+async def generate_from_text(
+    request: Request,
+    data: dict,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Accepts raw RFP text (pasted by user) and returns AI response.
     """
@@ -46,8 +89,7 @@ async def generate_from_text(data: dict):
     if not rfp_text or len(rfp_text) < 50:
         raise HTTPException(status_code=400, detail="RFP text is too short.")
 
-    profile = data.get("profile", {})
-    result = await run_rfp_agent(rfp_text, profile)
+    result = await run_rfp_agent(rfp_text[:MAX_TEXT_CHARS], data.get("profile", {}))
 
     return {
         "rfp_summary": result["summary"],
@@ -56,8 +98,14 @@ async def generate_from_text(data: dict):
         "win_score": result.get("win_score", {})
     }
 
+
 @router.post("/chat")
-async def chat_with_rfp(data: dict):
+@limiter.limit(CHAT_LIMIT)
+async def chat_with_rfp(
+    request: Request,
+    data: dict,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Accepts a question and RFP text,
     returns an AI answer based on the RFP content.
@@ -71,6 +119,6 @@ async def chat_with_rfp(data: dict):
         raise HTTPException(status_code=400, detail="RFP text is required.")
 
     from agents.chat_agent import answer_question
-    answer = await answer_question(rfp_text, question)
+    answer = await answer_question(rfp_text[:MAX_TEXT_CHARS], question)
 
     return { "answer": answer }

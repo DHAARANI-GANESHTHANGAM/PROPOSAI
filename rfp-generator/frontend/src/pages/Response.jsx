@@ -122,7 +122,7 @@ export default function Response() {
     setChatMessages(prev => [...prev, { role: "user", content: userMessage }]);
     setChatLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/chat`, {
+      const res = await authFetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -130,13 +130,23 @@ export default function Response() {
           rfp_text: result.rfp_summary
         })
       });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(
+          res.status === 429
+            ? "You've asked a lot of questions this hour. Please try again later."
+            : body.detail || `Something went wrong (${res.status}).`
+        );
+      }
+
       const data = await res.json();
       setChatMessages(prev => [...prev,
         { role: "assistant", content: data.answer }
       ]);
-    } catch {
+    } catch (err) {
       setChatMessages(prev => [...prev,
-        { role: "assistant", content: "Sorry, something went wrong. Please try again." }
+        { role: "assistant", content: err.message || "Sorry, something went wrong. Please try again." }
       ]);
     } finally {
       setChatLoading(false);

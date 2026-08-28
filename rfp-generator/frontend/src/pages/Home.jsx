@@ -2,9 +2,24 @@ import { useState, useEffect, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { getCompanyProfile } from "../utils/auth";
+import { getCompanyProfile, getToken } from "../utils/auth";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
+/**
+ * Prefer the server's own message. A rate-limit or size-limit response tells
+ * the user something they can act on; "Something went wrong" does not.
+ */
+function describeError(err) {
+  const status = err?.response?.status;
+  if (status === 429) {
+    return "You've reached the hourly generation limit. Please try again later.";
+  }
+  return (
+    err?.response?.data?.detail ||
+    "Something went wrong. Please try again."
+  );
+}
 
 const Card = ({ children, style = {} }) => (
   <div style={{
@@ -49,7 +64,10 @@ export default function Home() {
       formData.append("file", file);
       formData.append("profile", JSON.stringify(profile || {}));
       const res = await axios.post(`${API_URL}/api/generate`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
+        headers: {
+          "Content-Type": "multipart/form-data",
+          Authorization: `Bearer ${getToken()}`,
+        },
       });
       
       // const formData = new FormData();
@@ -59,7 +77,7 @@ export default function Home() {
       // });
       localStorage.setItem("rfp_result", JSON.stringify(res.data));
       navigate("/response");
-    } catch { setError("Something went wrong. Please try again."); }
+    } catch (err) { setError(describeError(err)); }
     finally { setLoading(false); }
   }, [navigate]);
 
@@ -73,10 +91,12 @@ export default function Home() {
       const res = await axios.post(`${API_URL}/api/generate-text`, {
         text: pastedText,
         profile: profile || {},
+      }, {
+        headers: { Authorization: `Bearer ${getToken()}` },
       });
       localStorage.setItem("rfp_result", JSON.stringify(res.data));
       navigate("/response");
-    } catch { setError("Something went wrong. Please try again."); }
+    } catch (err) { setError(describeError(err)); }
     finally { setLoading(false); }
   };
 

@@ -17,6 +17,7 @@ from pymongo.errors import DuplicateKeyError
 from typing import Literal
 
 from database.mongodb import (
+    get_history_collection,
     get_otp_challenges_collection,
     get_password_resets_collection,
     get_users_collection,
@@ -81,6 +82,13 @@ class OtpResendRequest(BaseModel):
 class ChangePasswordRequest(BaseModel):
     current_password: str = Field(min_length=1)
     new_password: str = Field(min_length=8)
+
+
+class DeleteAccountRequest(BaseModel):
+    password: str = Field(min_length=1)
+    # Typing the word is a second, deliberate action. A password field alone
+    # is muscle memory; this is not.
+    confirm: Literal["DELETE"]
 
 
 class ForgotPasswordRequest(BaseModel):
@@ -501,6 +509,53 @@ async def change_password(
     )
 
     return {"changed": True, **_session(str(user["_id"]), user["email"])}
+
+
+@router.delete("/me")
+async def delete_account(
+    payload: DeleteAccountRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Permanently deletes the account and everything attached to it.
+
+    Dependent data goes first and the user record last: if this fails halfway,
+    the account still exists and the user can try again. Deleting the user
+    first would leave history nobody can reach or remove.
+    """
+    collection = _collection()
+    user = await collection.find_one({"_id": ObjectId(current_user["id"])})
+    if user is None:
+        raise HTTPException(status_code=401, detail="Please sign in again.")
+
+    if not verify_password(payload.password, user.get("password_hash", "")):
+        raise HTTPException(
+            status_code=403,
+            detail="That doesn't match your password.",
+        )
+
+    user_id = str(user["_id"])
+    email = user.get("email", "")
+
+    history = get_history_collection()
+    removed_history = 0
+    if history is not None:
+        result = await history.delete_many({"user_id": user_id})
+        removed_history = result.deleted_count
+
+    resets = get_password_resets_collection()
+    if resets is not None:
+        await resets.delete_many({"user_id": user_id})
+
+    otps = get_otp_challenges_collection()
+    if otps is not None:
+        # OTP challenges are keyed by email, not user id — a pending sign-up
+        # for this address would otherwise survive the account itself.
+        await otps.delete_many({"email": email})
+
+    await collection.delete_one({"_id": user["_id"]})
+
+    return {"deleted": True, "history_removed": removed_history}
 
 
 @router.get("/me")

@@ -1,5 +1,10 @@
 import { useState, useEffect } from "react";
-import { getCompanyProfile, saveCompanyProfile, changePassword } from "../utils/auth";
+import {
+  getCompanyProfile,
+  saveCompanyProfile,
+  changePassword,
+  deleteAccount,
+} from "../utils/auth";
 import { validatePassword, validatePasswordConfirmation } from "../utils/validation";
 
 const EMPTY_PROFILE = {
@@ -38,6 +43,32 @@ export default function Profile() {
     setPasswords((prev) => ({ ...prev, [field]: value }));
     setPwError("");
     setPwDone(false);
+  };
+
+  // Delete account. Collapsed by default so the destructive control isn't
+  // sitting open next to ordinary form fields.
+  const [dangerOpen, setDangerOpen]   = useState(false);
+  const [deletePw, setDeletePw]       = useState("");
+  const [deleteWord, setDeleteWord]   = useState("");
+  const [deleting, setDeleting]       = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+
+  const canDelete = deletePw.length > 0 && deleteWord === "DELETE";
+
+  const submitDelete = async (e) => {
+    e.preventDefault();
+    if (deleting || !canDelete) return;
+
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await deleteAccount(deletePw, deleteWord);
+      // The token is already cleared; a full reload drops all in-memory state.
+      window.location.href = "/";
+    } catch (err) {
+      setDeleteError(err.message);
+      setDeleting(false);
+    }
   };
 
   const submitPassword = async (e) => {
@@ -303,6 +334,100 @@ export default function Profile() {
             {pwSaving ? "Changing…" : "Change password"}
           </button>
         </form>
+      </div>
+
+      {/* Danger zone */}
+      <div style={{ background: "#140d0d", border: "1px solid #3a1a1a",
+        borderRadius: "12px", padding: "28px", marginTop: "24px" }}>
+        <h2 style={{ fontSize: "16px", fontWeight: "700", color: "#ef4444",
+          marginBottom: "6px" }}>
+          Delete account
+        </h2>
+        <p style={{ color: "#8a6a6a", fontSize: "13px", lineHeight: 1.6,
+          marginBottom: dangerOpen ? "20px" : "0" }}>
+          Permanently removes your account, your company profile and every
+          saved proposal. This cannot be undone.
+        </p>
+
+        {!dangerOpen ? (
+          <button type="button" onClick={() => setDangerOpen(true)} style={{
+            marginTop: "16px", padding: "10px 18px", background: "transparent",
+            border: "1px solid #3a1a1a", borderRadius: "8px",
+            color: "#ef4444", fontSize: "13px", fontFamily: "inherit",
+            cursor: "pointer" }}>
+            Delete my account
+          </button>
+        ) : (
+          <form onSubmit={submitDelete} noValidate>
+            <label htmlFor="delete-password" style={{ color: "#8a6a6a",
+              fontSize: "12px", fontWeight: "600", letterSpacing: "1px",
+              display: "block", marginBottom: "8px" }}>
+              YOUR PASSWORD
+            </label>
+            <input
+              id="delete-password"
+              type="password"
+              autoComplete="current-password"
+              value={deletePw}
+              onChange={(e) => { setDeletePw(e.target.value); setDeleteError(""); }}
+              placeholder="••••••••"
+              style={{ width: "100%", padding: "10px 14px", background: "#0d0d14",
+                border: "1px solid #3a1a1a", borderRadius: "8px", color: "#fff",
+                fontSize: "14px", outline: "none", boxSizing: "border-box",
+                marginBottom: "20px" }}
+            />
+
+            <label htmlFor="delete-confirm" style={{ color: "#8a6a6a",
+              fontSize: "12px", fontWeight: "600", letterSpacing: "1px",
+              display: "block", marginBottom: "8px" }}>
+              TYPE DELETE TO CONFIRM
+            </label>
+            <input
+              id="delete-confirm"
+              type="text"
+              autoComplete="off"
+              value={deleteWord}
+              onChange={(e) => { setDeleteWord(e.target.value); setDeleteError(""); }}
+              placeholder="DELETE"
+              style={{ width: "100%", padding: "10px 14px", background: "#0d0d14",
+                border: "1px solid #3a1a1a", borderRadius: "8px", color: "#fff",
+                fontSize: "14px", outline: "none", boxSizing: "border-box",
+                marginBottom: "20px" }}
+            />
+
+            {deleteError && (
+              <p role="alert" style={{ color: "#ef4444", fontSize: "13px",
+                marginBottom: "14px" }}>
+                ⚠️ {deleteError}
+              </p>
+            )}
+
+            <div className="btn-row" style={{ display: "flex", gap: "8px" }}>
+              <button type="submit" disabled={!canDelete || deleting} style={{
+                flex: 1, padding: "12px",
+                background: canDelete ? "#7f1d1d" : "#1a0d0d",
+                border: "1px solid #3a1a1a", borderRadius: "8px",
+                color: canDelete ? "#fff" : "#5a3a3a",
+                fontSize: "14px", fontWeight: "600", fontFamily: "inherit",
+                cursor: canDelete && !deleting ? "pointer" : "not-allowed" }}>
+                {deleting ? "Deleting…" : "Permanently delete"}
+              </button>
+              <button type="button" disabled={deleting}
+                onClick={() => {
+                  setDangerOpen(false);
+                  setDeletePw("");
+                  setDeleteWord("");
+                  setDeleteError("");
+                }}
+                style={{ padding: "12px 18px", background: "transparent",
+                  border: "1px solid #2e2e3e", borderRadius: "8px",
+                  color: "#888", fontSize: "14px", fontFamily: "inherit",
+                  cursor: "pointer" }}>
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );

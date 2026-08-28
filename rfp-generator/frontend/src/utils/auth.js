@@ -121,6 +121,24 @@ export async function changePassword(currentPassword, newPassword) {
   return data;
 }
 
+/**
+ * Permanently deletes the account and everything attached to it.
+ * `confirm` must be the literal string "DELETE".
+ */
+export async function deleteAccount(password, confirm) {
+  const res = await authFetch("/api/auth/me", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password, confirm }),
+  });
+  if (!res.ok) {
+    throw new Error(await readError(res, `Could not delete your account (${res.status})`));
+  }
+
+  clearToken();
+  return res.json();
+}
+
 /** The signed-in user's company profile, saved server-side. */
 export async function getCompanyProfile() {
   const res = await authFetch("/api/profile");

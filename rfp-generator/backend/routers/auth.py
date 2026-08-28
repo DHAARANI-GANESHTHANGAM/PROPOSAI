@@ -78,6 +78,11 @@ class OtpResendRequest(BaseModel):
     purpose: Literal["signup", "login"]
 
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=1)
+    new_password: str = Field(min_length=8)
+
+
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 
@@ -442,6 +447,60 @@ async def reset_password(payload: ResetPasswordRequest):
     )
 
     return {"message": "Password updated. Sign in with your new password."}
+
+
+@router.post("/change-password")
+async def change_password(
+    payload: ChangePasswordRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Changes the password for the signed-in user.
+
+    Requires the current password: without it, anyone who reaches an unlocked
+    laptop could lock the real owner out of their own account.
+
+    Every other session is signed out (that's the point of changing a
+    password), but a fresh token is returned so the device doing the change
+    stays signed in instead of being kicked to the login screen.
+    """
+    _check_password_length(payload.new_password)
+
+    collection = _collection()
+    user = await collection.find_one({"_id": ObjectId(current_user["id"])})
+    if user is None:
+        raise HTTPException(status_code=401, detail="Please sign in again.")
+
+    stored_hash = user.get("password_hash", "")
+
+    if not verify_password(payload.current_password, stored_hash):
+        raise HTTPException(
+            status_code=403,
+            detail="That doesn't match your current password.",
+        )
+
+    if verify_password(payload.new_password, stored_hash):
+        raise HTTPException(
+            status_code=400,
+            detail="Your new password must be different from the current one.",
+        )
+
+    now = datetime.now(timezone.utc)
+    await collection.update_one(
+        {"_id": user["_id"]},
+        {"$set": {
+            "password_hash": hash_password(payload.new_password),
+            "password_changed_at": now,
+        }},
+    )
+
+    # A reset link already in someone's inbox must not outlive the change.
+    await _resets_collection().update_many(
+        {"user_id": str(user["_id"]), "used_at": None},
+        {"$set": {"used_at": now}},
+    )
+
+    return {"changed": True, **_session(str(user["_id"]), user["email"])}
 
 
 @router.get("/me")

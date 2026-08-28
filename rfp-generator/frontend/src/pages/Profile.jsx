@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { getCompanyProfile, saveCompanyProfile } from "../utils/auth";
+import { getCompanyProfile, saveCompanyProfile, changePassword } from "../utils/auth";
+import { validatePassword, validatePasswordConfirmation } from "../utils/validation";
 
 const EMPTY_PROFILE = {
   companyName:   "",
@@ -20,6 +21,45 @@ export default function Profile() {
   const [saved, setSaved]     = useState(false);
   const [error, setError]     = useState("");
   const [notice, setNotice]   = useState("");
+
+  // Change-password form, kept separate from the profile form above so a
+  // failure in one never clears the other.
+  const [passwords, setPasswords] = useState({ current: "", next: "", confirm: "" });
+  const [pwTouched, setPwTouched] = useState(false);
+  const [pwSaving, setPwSaving]   = useState(false);
+  const [pwError, setPwError]     = useState("");
+  const [pwDone, setPwDone]       = useState(false);
+
+  const nextError    = validatePassword(passwords.next);
+  const confirmError = validatePasswordConfirmation(passwords.next, passwords.confirm);
+  const currentError = passwords.current ? "" : "Enter your current password.";
+
+  const setPassword = (field, value) => {
+    setPasswords((prev) => ({ ...prev, [field]: value }));
+    setPwError("");
+    setPwDone(false);
+  };
+
+  const submitPassword = async (e) => {
+    e.preventDefault();
+    if (pwSaving) return;
+
+    setPwTouched(true);
+    if (currentError || nextError || confirmError) return;
+
+    setPwSaving(true);
+    setPwError("");
+    try {
+      await changePassword(passwords.current, passwords.next);
+      setPasswords({ current: "", next: "", confirm: "" });
+      setPwTouched(false);
+      setPwDone(true);
+    } catch (err) {
+      setPwError(err.message);
+    } finally {
+      setPwSaving(false);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -185,6 +225,84 @@ export default function Profile() {
             </button>
           </>
         )}
+      </div>
+
+      {/* Change password */}
+      <div style={{ background: "#111118", border: "1px solid #1e1e2e",
+        borderRadius: "12px", padding: "28px", marginTop: "24px" }}>
+        <h2 style={{ fontSize: "16px", fontWeight: "700", color: "#fff",
+          marginBottom: "6px" }}>
+          Change password
+        </h2>
+        <p style={{ color: "#555", fontSize: "13px", lineHeight: 1.6,
+          marginBottom: "20px" }}>
+          You'll stay signed in here. Every other device is signed out.
+        </p>
+
+        <form onSubmit={submitPassword} noValidate>
+          {[
+            { key: "current", label: "CURRENT PASSWORD", autoComplete: "current-password",
+              error: currentError },
+            { key: "next",    label: "NEW PASSWORD",     autoComplete: "new-password",
+              error: nextError },
+            { key: "confirm", label: "CONFIRM NEW PASSWORD", autoComplete: "new-password",
+              error: confirmError },
+          ].map(({ key, label, autoComplete, error: fieldError }) => {
+            const showError = pwTouched && !!fieldError;
+            return (
+              <div key={key} style={{ marginBottom: showError ? "6px" : "20px" }}>
+                <label htmlFor={`pw-${key}`} style={{ color: "#555", fontSize: "12px",
+                  fontWeight: "600", letterSpacing: "1px", display: "block",
+                  marginBottom: "8px" }}>
+                  {label}
+                </label>
+                <input
+                  id={`pw-${key}`}
+                  type="password"
+                  autoComplete={autoComplete}
+                  value={passwords[key]}
+                  onChange={(e) => setPassword(key, e.target.value)}
+                  onBlur={() => setPwTouched(true)}
+                  aria-invalid={showError}
+                  placeholder="••••••••"
+                  style={{ width: "100%", padding: "10px 14px",
+                    background: "#0d0d14",
+                    border: `1px solid ${showError ? "#ef4444" : "#1e1e2e"}`,
+                    borderRadius: "8px", color: "#fff", fontSize: "14px",
+                    outline: "none", boxSizing: "border-box" }}
+                />
+                {showError && (
+                  <p role="alert" style={{ color: "#ef4444", fontSize: "12.5px",
+                    margin: "6px 0 14px" }}>
+                    {fieldError}
+                  </p>
+                )}
+              </div>
+            );
+          })}
+
+          {pwError && (
+            <p role="alert" style={{ color: "#ef4444", fontSize: "13px",
+              marginBottom: "14px" }}>
+              ⚠️ {pwError}
+            </p>
+          )}
+          {pwDone && (
+            <p style={{ color: "#22c55e", fontSize: "13px", marginBottom: "14px" }}>
+              ✅ Password changed. Other devices have been signed out.
+            </p>
+          )}
+
+          <button type="submit" disabled={pwSaving} style={{
+            width: "100%", padding: "12px", background: "#1e1e2e",
+            border: "1px solid #2e2e3e", borderRadius: "8px",
+            color: "#fff", fontSize: "14px", fontWeight: "600",
+            fontFamily: "inherit",
+            cursor: pwSaving ? "not-allowed" : "pointer",
+            opacity: pwSaving ? 0.7 : 1 }}>
+            {pwSaving ? "Changing…" : "Change password"}
+          </button>
+        </form>
       </div>
     </div>
   );

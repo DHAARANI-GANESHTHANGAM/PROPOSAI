@@ -98,6 +98,29 @@ export function logout() {
   window.location.href = "/";
 }
 
+/**
+ * Changes the password for the signed-in user. The backend signs out every
+ * other session and hands back a fresh token for this one, so the current
+ * device isn't kicked to the login screen.
+ */
+export async function changePassword(currentPassword, newPassword) {
+  const res = await authFetch("/api/auth/change-password", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      current_password: currentPassword,
+      new_password: newPassword,
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(await readError(res, `Could not change your password (${res.status})`));
+  }
+
+  const data = await res.json();
+  if (data.access_token) setToken(data.access_token);
+  return data;
+}
+
 /** The signed-in user's company profile, saved server-side. */
 export async function getCompanyProfile() {
   const res = await authFetch("/api/profile");

@@ -48,6 +48,9 @@ class RFPHistoryUpdate(BaseModel):
     Partial update. Only the fields actually sent are written, so patching the
     chat thread can't blank out an edited draft by omitting it.
     """
+    # A name the user chose. Falls back to the filename in the UI when unset —
+    # pasted RFPs have no filename at all and were listed as "RFP Response #4".
+    title: Optional[str] = Field(default=None, max_length=200)
     edited: Optional[str] = None
     chat_messages: Optional[List[ChatMessage]] = Field(
         default=None, max_length=MAX_CHAT_MESSAGES

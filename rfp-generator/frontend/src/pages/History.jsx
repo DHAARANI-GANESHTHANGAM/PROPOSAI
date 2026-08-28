@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { authFetch } from "../utils/auth";
 
@@ -6,12 +6,17 @@ export default function History() {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState("");
+  const [query, setQuery]     = useState("");
   // Deleting is irreversible, so both delete actions ask once inline rather
   // than firing on the first click. A native confirm() would block the page.
   const [confirmingId, setConfirmingId] = useState(null);
   const [deletingId, setDeletingId]     = useState(null);
   const [confirmingClear, setConfirmingClear] = useState(false);
   const [clearing, setClearing] = useState(false);
+  // Inline rename.
+  const [renamingId, setRenamingId] = useState(null);
+  const [draftTitle, setDraftTitle] = useState("");
+  const [renaming, setRenaming]     = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -33,6 +38,27 @@ export default function History() {
     loadHistory();
   }, []);
 
+  /**
+   * What to call an entry. A pasted RFP has no filename, so without a chosen
+   * title these were all listed as "RFP Response #4".
+   */
+  const displayName = (item, index) =>
+    item.title || item.filename || `RFP Response #${history.length - index}`;
+
+  const filtered = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return history.map((item, index) => ({ item, index }));
+
+    return history
+      .map((item, index) => ({ item, index }))
+      .filter(({ item, index }) => {
+        const when = item.created_at
+          ? new Date(item.created_at).toLocaleString().toLowerCase()
+          : "";
+        return `${displayName(item, index)} ${when}`.toLowerCase().includes(needle);
+      });
+  }, [history, query]);
+
   const loadResponse = (item) => {
     // Prefer the edited draft the user saved, falling back to the original
     localStorage.setItem("rfp_result", JSON.stringify({
@@ -40,6 +66,43 @@ export default function History() {
       drafted_response: item.edited || item.drafted_response,
     }));
     navigate("/response");
+  };
+
+  const startRename = (item, index) => {
+    setError("");
+    setConfirmingId(null);
+    setRenamingId(item.id);
+    setDraftTitle(item.title || displayName(item, index));
+  };
+
+  const submitRename = async (id) => {
+    const title = draftTitle.trim();
+    if (!title || renaming) {
+      setRenamingId(null);
+      return;
+    }
+
+    setRenaming(true);
+    setError("");
+    try {
+      const res = await authFetch(`/api/history/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.detail || `Could not rename this response (${res.status})`);
+      }
+      setHistory((items) =>
+        items.map((item) => (item.id === id ? { ...item, title } : item))
+      );
+      setRenamingId(null);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setRenaming(false);
+    }
   };
 
   const deleteItem = async (id) => {
@@ -124,6 +187,20 @@ export default function History() {
         )}
       </div>
 
+      {history.length > 1 && (
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search by name or date…"
+          aria-label="Search your saved responses"
+          style={{ width: "100%", padding: "10px 14px", marginBottom: "16px",
+            background: "#0d0d14", border: "1px solid #1e1e2e",
+            borderRadius: "8px", color: "#fff", fontSize: "14px",
+            outline: "none", boxSizing: "border-box" }}
+        />
+      )}
+
       {error && (
         <div style={{ background: "#1a0d0d", border: "1px solid #3a1a1a",
           borderRadius: "8px", padding: "12px 16px", marginBottom: "20px",
@@ -150,18 +227,47 @@ export default function History() {
             color: "#fff", fontSize: "13px", cursor: "pointer",
           }}>Generate Now →</button>
         </div>
+      ) : filtered.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "60px 0",
+          color: "#444", fontSize: "14px" }}>
+          Nothing matches “{query.trim()}”.
+        </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-          {history.map((item, i) => (
+          {filtered.map(({ item, index }) => (
             <div key={item.id} className="head-row" style={{ background: "#111118",
               border: "1px solid #1e1e2e", borderRadius: "12px",
               padding: "20px", display: "flex", gap: "12px",
               justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ color: "#fff", fontSize: "14px",
-                  fontWeight: "500", marginBottom: "4px" }}>
-                  {item.filename || `RFP Response #${history.length - i}`}
-                </div>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                {renamingId === item.id ? (
+                  <input
+                    autoFocus
+                    value={draftTitle}
+                    maxLength={200}
+                    onChange={(e) => setDraftTitle(e.target.value)}
+                    onBlur={() => submitRename(item.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") submitRename(item.id);
+                      if (e.key === "Escape") setRenamingId(null);
+                    }}
+                    aria-label="Response name"
+                    style={{ width: "100%", padding: "6px 10px", background: "#0d0d14",
+                      border: "1px solid #6366f1", borderRadius: "6px",
+                      color: "#fff", fontSize: "14px", outline: "none",
+                      boxSizing: "border-box", marginBottom: "4px" }}
+                  />
+                ) : (
+                  <button
+                    onClick={() => startRename(item, index)}
+                    title="Click to rename"
+                    style={{ background: "none", border: "none", padding: 0,
+                      textAlign: "left", color: "#fff", fontSize: "14px",
+                      fontWeight: "500", fontFamily: "inherit",
+                      marginBottom: "4px", cursor: "text" }}>
+                    {displayName(item, index)}
+                  </button>
+                )}
                 <div style={{ color: "#444", fontSize: "12px" }}>
                   {item.created_at
                     ? new Date(item.created_at).toLocaleString()
@@ -191,7 +297,7 @@ export default function History() {
                       fontWeight: "500", cursor: "pointer",
                     }}>View →</button>
                     <button onClick={() => { setError(""); setConfirmingId(item.id); }}
-                      aria-label={`Delete ${item.filename || "this response"}`}
+                      aria-label={`Delete ${displayName(item, index)}`}
                       title="Delete"
                       style={dangerButton}>
                       🗑

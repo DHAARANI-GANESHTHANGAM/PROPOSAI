@@ -6,7 +6,7 @@ or delete another user's history by passing a different id.
 """
 
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -19,6 +19,17 @@ from utils.security import get_current_user
 router = APIRouter()
 
 
+# A long Q&A thread shouldn't be able to grow a single document without
+# bound — Mongo's own ceiling is 16 MB per document.
+MAX_CHAT_MESSAGES = 200
+MAX_MESSAGE_CHARS = 10_000
+
+
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(max_length=MAX_MESSAGE_CHARS)
+
+
 class RFPHistoryCreate(BaseModel):
     rfp_summary: str = ""
     drafted_response: str = ""
@@ -27,6 +38,20 @@ class RFPHistoryCreate(BaseModel):
     filename: Optional[str] = None
     edited: Optional[str] = None
     rfp_text: Optional[str] = None
+    chat_messages: List[ChatMessage] = Field(
+        default_factory=list, max_length=MAX_CHAT_MESSAGES
+    )
+
+
+class RFPHistoryUpdate(BaseModel):
+    """
+    Partial update. Only the fields actually sent are written, so patching the
+    chat thread can't blank out an edited draft by omitting it.
+    """
+    edited: Optional[str] = None
+    chat_messages: Optional[List[ChatMessage]] = Field(
+        default=None, max_length=MAX_CHAT_MESSAGES
+    )
 
 
 def _collection():
@@ -73,6 +98,41 @@ async def save_history(
     result = await collection.insert_one(document)
 
     return {"id": str(result.inserted_id), "saved": True}
+
+
+@router.patch("/history/{history_id}")
+async def update_history_item(
+    history_id: str,
+    changes: RFPHistoryUpdate,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Updates one saved response in place.
+
+    Used to keep the chat thread with the proposal it belongs to: questions
+    asked after the initial save used to live only in React state and were
+    lost on reload.
+    """
+    # model_dump already flattens the nested ChatMessage models to plain dicts.
+    updates = {
+        key: value
+        for key, value in changes.model_dump(exclude_unset=True).items()
+        if value is not None
+    }
+
+    if not updates:
+        raise HTTPException(status_code=400, detail="Nothing to update.")
+
+    updates["updated_at"] = datetime.now(timezone.utc)
+
+    result = await _collection().update_one(
+        {"_id": _object_id(history_id), "user_id": current_user["id"]},
+        {"$set": updates},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="History item not found.")
+
+    return {"updated": True}
 
 
 @router.get("/history")

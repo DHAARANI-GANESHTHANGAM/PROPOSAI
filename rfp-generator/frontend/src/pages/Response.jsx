@@ -19,6 +19,10 @@ export default function Response() {
   const [winScore, setWinScore]         = useState(null);
   const [exporting, setExporting]       = useState(false);
   const [companyName, setCompanyName]   = useState("");
+  // Set once this proposal exists in history — either because it was opened
+  // from there, or because it has just been saved. Without it there's no
+  // document to attach the conversation to.
+  const [historyId, setHistoryId]       = useState(null);
   const navigate                        = useNavigate();
 
   useEffect(() => {
@@ -29,6 +33,8 @@ export default function Response() {
     setEdited(parsed.drafted_response);
     if (parsed.win_score) setWinScore(parsed.win_score);
     if (parsed.rfp_text) setRfpText(parsed.rfp_text);
+    if (parsed.id) setHistoryId(parsed.id);
+    if (Array.isArray(parsed.chat_messages)) setChatMessages(parsed.chat_messages);
   }, [navigate]);
 
   useEffect(() => {
@@ -100,6 +106,7 @@ export default function Response() {
           filename: result.filename || null,
           rfp_text: rfpText || null,
           edited,
+          chat_messages: chatMessages,
         }),
       });
 
@@ -107,6 +114,8 @@ export default function Response() {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.detail || `Save failed (${res.status})`);
       }
+      const body = await res.json().catch(() => ({}));
+      if (body.id) setHistoryId(body.id);
       setSaved(true);
     } catch (err) {
       setSaveError(err.message);
@@ -115,11 +124,29 @@ export default function Response() {
     }
   };
 
+  /**
+   * Writes the thread back to the saved proposal. Best-effort: a failure here
+   * must not interrupt the conversation the user is having.
+   */
+  const persistChat = async (messages) => {
+    if (!historyId) return;
+    try {
+      await authFetch(`/api/history/${historyId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_messages: messages }),
+      });
+    } catch {
+      /* keep the conversation going regardless */
+    }
+  };
+
   const handleChat = async () => {
     if (!chatInput.trim()) return;
     const userMessage = chatInput.trim();
     setChatInput("");
-    setChatMessages(prev => [...prev, { role: "user", content: userMessage }]);
+    const withQuestion = [...chatMessages, { role: "user", content: userMessage }];
+    setChatMessages(withQuestion);
     setChatLoading(true);
     try {
       const res = await authFetch("/api/chat", {
@@ -141,11 +168,15 @@ export default function Response() {
       }
 
       const data = await res.json();
-      setChatMessages(prev => [...prev,
+      const withAnswer = [...withQuestion,
         { role: "assistant", content: data.answer }
-      ]);
+      ];
+      setChatMessages(withAnswer);
+      persistChat(withAnswer);
     } catch (err) {
-      setChatMessages(prev => [...prev,
+      // Errors stay on screen but are never written to history — nobody wants
+      // "Sorry, something went wrong" preserved in their saved thread.
+      setChatMessages([...withQuestion,
         { role: "assistant", content: err.message || "Sorry, something went wrong. Please try again." }
       ]);
     } finally {
@@ -358,6 +389,15 @@ export default function Response() {
       {/* Chat Tab */}
       {tab === "chat" && (
         <div className="chat-col" style={{ display: "flex", flexDirection: "column" }}>
+
+          {!historyId && (
+            <div style={{ background: "#13131f", border: "1px solid #2e2e5e",
+              borderRadius: "8px", padding: "10px 14px", marginBottom: "12px",
+              color: "#8888cc", fontSize: "12.5px", lineHeight: 1.5 }}>
+              💾 Save this proposal to keep the conversation — until then it's
+              only in this tab.
+            </div>
+          )}
 
           {/* Messages Area */}
           <div style={{ flex: 1, overflowY: "auto", marginBottom: "16px",

@@ -5,6 +5,7 @@ Replaces Supabase Auth — identity now lives in the MongoDB `users` collection.
 """
 
 import hashlib
+import hmac
 import os
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -57,6 +58,27 @@ def hash_reset_token(token: str) -> str:
     against here.
     """
     return hashlib.sha256((token or "").encode("utf-8")).hexdigest()
+
+
+# A six-digit code is only 20 bits, so the defence is not the code's size but
+# the short expiry and the attempt cap enforced in routers/auth.py.
+OTP_LENGTH = 6
+OTP_MAX_ATTEMPTS = 5
+
+
+def generate_otp() -> str:
+    """A cryptographically random six-digit code, zero-padded."""
+    return f"{secrets.randbelow(10 ** OTP_LENGTH):0{OTP_LENGTH}d}"
+
+
+def hash_otp(code: str) -> str:
+    """Codes are stored hashed, never in the clear."""
+    return hashlib.sha256((code or "").strip().encode("utf-8")).hexdigest()
+
+
+def verify_otp(code: str, code_hash: str) -> bool:
+    """Constant-time compare, so timing can't leak digits."""
+    return hmac.compare_digest(hash_otp(code), code_hash or "")
 
 
 def _as_utc(value):

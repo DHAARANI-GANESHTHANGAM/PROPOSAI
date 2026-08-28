@@ -19,6 +19,7 @@ MONGODB_DB_NAME = os.getenv("MONGODB_DB_NAME", "proposai")
 HISTORY_COLLECTION = "rfp_history"
 USERS_COLLECTION = "users"
 PASSWORD_RESETS_COLLECTION = "password_resets"
+OTP_CHALLENGES_COLLECTION = "otp_challenges"
 
 _client: AsyncIOMotorClient | None = None
 _db: AsyncIOMotorDatabase | None = None
@@ -68,6 +69,12 @@ async def _ensure_indexes() -> None:
     await _db[PASSWORD_RESETS_COLLECTION].create_index("token_hash", unique=True)
     await _db[PASSWORD_RESETS_COLLECTION].create_index("expires_at", expireAfterSeconds=0)
 
+    # One live challenge per (email, purpose); Mongo sweeps them once they lapse.
+    await _db[OTP_CHALLENGES_COLLECTION].create_index(
+        [("email", ASCENDING), ("purpose", ASCENDING)], unique=True
+    )
+    await _db[OTP_CHALLENGES_COLLECTION].create_index("expires_at", expireAfterSeconds=0)
+
 
 def get_database() -> AsyncIOMotorDatabase:
     """Returns the active database, or None if the connection never came up."""
@@ -93,3 +100,10 @@ def get_password_resets_collection():
     if _db is None:
         return None
     return _db[PASSWORD_RESETS_COLLECTION]
+
+
+def get_otp_challenges_collection():
+    """Returns the otp_challenges collection, or None if MongoDB is unavailable."""
+    if _db is None:
+        return None
+    return _db[OTP_CHALLENGES_COLLECTION]

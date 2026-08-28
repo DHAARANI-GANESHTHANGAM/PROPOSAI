@@ -1,8 +1,16 @@
 import { useEffect, useRef, useState } from "react";
-import { login, signup, requestPasswordReset } from "../utils/auth";
+import {
+  login,
+  signup,
+  requestPasswordReset,
+  verifyLogin,
+  verifySignup,
+  resendOtp,
+} from "../utils/auth";
 import {
   validateEmail,
   validatePassword,
+  validateOtpCode,
   suggestEmailFix,
 } from "../utils/validation";
 
@@ -50,10 +58,20 @@ export default function AuthModal({ mode = "login", onClose }) {
   // been submitted, so nobody gets scolded halfway through typing. After that
   // it updates live as they fix it.
   const [touched, setTouched] = useState({ email: false, password: false });
+  // The one-time code step. `otpPurpose` decides which verify endpoint runs.
+  const [otpCode, setOtpCode] = useState("");
+  const [otpPurpose, setOtpPurpose] = useState(null);
+  const [otpTouched, setOtpTouched] = useState(false);
+  const [resendIn, setResendIn] = useState(0);
+  const [resending, setResending] = useState(false);
   const emailRef = useRef(null);
   const passwordRef = useRef(null);
+  const otpRef = useRef(null);
 
   const forgotView = view === "forgot";
+  const otpView = view === "otp";
+  const otpError = validateOtpCode(otpCode);
+  const showOtpError = otpTouched && !!otpError;
   const emailError = validateEmail(email);
   const passwordError = validatePassword(password);
   const emailSuggestion = emailError ? "" : suggestEmailFix(email);
@@ -74,11 +92,19 @@ export default function AuthModal({ mode = "login", onClose }) {
     };
   }, [loading, onClose]);
 
+  // Ticks the "Resend in Ns" counter down to zero.
+  useEffect(() => {
+    if (resendIn <= 0) return undefined;
+    const timer = setTimeout(() => setResendIn((n) => n - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendIn]);
+
   const resetMessages = () => {
     setError("");
     setSuccess("");
     setNotice("");
     setTouched({ email: false, password: false });
+    setOtpTouched(false);
   };
 
   const switchTab = (next) => {
@@ -98,6 +124,10 @@ export default function AuthModal({ mode = "login", onClose }) {
   const backToSignIn = () => {
     setTab("login");
     setView("credentials");
+    setOtpCode("");
+    setOtpPurpose(null);
+    setPassword("");
+    setResendIn(0);
     resetMessages();
   };
 
@@ -127,21 +157,77 @@ export default function AuthModal({ mode = "login", onClose }) {
         return;
       }
 
-      if (tab === "login") {
-        await login(cleanEmail, password);
-      } else {
-        await signup(cleanEmail, password);
-        setSuccess("Account created — signing you in…");
-      }
-      // Reload so App re-reads the stored token and mounts the app shell.
-      window.location.href = "/";
+      // Neither step returns a session: both email a code and wait for it.
+      const { message } = tab === "login"
+        ? await login(cleanEmail, password)
+        : await signup(cleanEmail, password);
+
+      setNotice(message);
+      setOtpPurpose(tab === "login" ? "login" : "signup");
+      setOtpCode("");
+      setOtpTouched(false);
+      setResendIn(30);
+      setView("otp");
+      setLoading(false);
+      setTimeout(() => otpRef.current?.focus(), 0);
+      return;
     } catch (err) {
       setError(err.message);
       setLoading(false);
     }
   };
 
-  const heading = forgotView
+  const submitOtp = async (e) => {
+    e.preventDefault();
+    if (loading) return;
+
+    setOtpTouched(true);
+    if (otpError) {
+      otpRef.current?.focus();
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    const cleanEmail = email.trim();
+
+    try {
+      if (otpPurpose === "login") {
+        await verifyLogin(cleanEmail, otpCode.trim());
+      } else {
+        await verifySignup(cleanEmail, otpCode.trim());
+      }
+      // Reload so App re-reads the stored token and mounts the app shell.
+      window.location.href = "/";
+    } catch (err) {
+      setError(err.message);
+      setOtpCode("");
+      setLoading(false);
+      otpRef.current?.focus();
+    }
+  };
+
+  const requestAnotherCode = async () => {
+    if (resending || resendIn > 0) return;
+    setResending(true);
+    setError("");
+    try {
+      const { message } = await resendOtp(email.trim(), otpPurpose);
+      setNotice(message);
+      setOtpCode("");
+      setOtpTouched(false);
+      setResendIn(30);
+      otpRef.current?.focus();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setResending(false);
+    }
+  };
+
+  const heading = otpView
+    ? "Check your email"
+    : forgotView
     ? "Reset your password"
     : view === "sent"
     ? "Check your inbox"
@@ -149,7 +235,9 @@ export default function AuthModal({ mode = "login", onClose }) {
     ? "Welcome back"
     : "Create your free account";
 
-  const subheading = forgotView
+  const subheading = otpView
+    ? notice
+    : forgotView
     ? "Tell us the address you signed up with and we'll email you a link to set a new password."
     : view === "sent"
     ? ""
@@ -238,8 +326,107 @@ export default function AuthModal({ mode = "login", onClose }) {
           </p>
         )}
 
-        {/* ---------------- Reset link sent ---------------- */}
-        {view === "sent" ? (
+        {/* ---------------- One-time code ---------------- */}
+        {otpView ? (
+          <form onSubmit={submitOtp} noValidate>
+            <label htmlFor="auth-otp" style={labelStyle}>
+              6-DIGIT CODE
+            </label>
+            <input
+              id="auth-otp"
+              ref={otpRef}
+              className={`field${showOtpError ? " is-invalid" : ""}`}
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              required
+              value={otpCode}
+              onChange={(e) => {
+                // Digits only, so a pasted "123 456" still works.
+                setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6));
+                setError("");
+              }}
+              onBlur={() => setOtpTouched(true)}
+              aria-invalid={showOtpError}
+              aria-describedby={showOtpError ? "auth-otp-error" : undefined}
+              placeholder="000000"
+              style={{
+                marginBottom: showOtpError ? "6px" : "16px",
+                fontSize: "22px",
+                letterSpacing: "8px",
+                textAlign: "center",
+                fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+              }}
+            />
+
+            {showOtpError && (
+              <p id="auth-otp-error" role="alert" className="field-error">
+                {otpError}
+              </p>
+            )}
+
+            {error && (
+              <p role="alert" style={{
+                color: "var(--danger)", fontSize: "13px", marginBottom: "14px",
+              }}>
+                {error}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="sheen press"
+              style={{
+                width: "100%", padding: "12px", background: "var(--brand)",
+                border: "none", borderRadius: "10px", color: "#fff",
+                fontSize: "14px", fontWeight: 600, fontFamily: "inherit",
+                cursor: loading ? "not-allowed" : "pointer",
+                opacity: loading ? 0.7 : 1,
+                display: "flex", alignItems: "center",
+                justifyContent: "center", gap: "8px",
+                boxShadow: `0 8px 24px var(--brand-glow)`,
+              }}
+            >
+              {loading && (
+                <span aria-hidden="true" style={{
+                  width: "14px", height: "14px",
+                  border: "2px solid rgba(255,255,255,0.35)",
+                  borderTopColor: "#fff", borderRadius: "50%",
+                  animation: "spin 0.7s linear infinite",
+                }} />
+              )}
+              {loading
+                ? "Verifying…"
+                : otpPurpose === "signup"
+                ? "Create account →"
+                : "Sign In →"}
+            </button>
+
+            <p style={{
+              color: "var(--text-faint)", fontSize: "12px",
+              textAlign: "center", marginTop: "18px", lineHeight: 1.7,
+            }}>
+              Didn't get it? Check your spam folder.
+              <br />
+              {resendIn > 0 ? (
+                <span>You can ask for a new code in {resendIn}s</span>
+              ) : (
+                <button type="button" onClick={requestAnotherCode}
+                  disabled={resending} style={linkButtonStyle}>
+                  {resending ? "Sending…" : "Send a new code"}
+                </button>
+              )}
+              <br />
+              <button type="button" onClick={backToSignIn} style={{
+                ...linkButtonStyle, marginTop: "8px", color: "var(--text-faint)",
+              }}>
+                ← Start over
+              </button>
+            </p>
+          </form>
+        ) : view === "sent" ? (
           <div>
             <div
               style={{

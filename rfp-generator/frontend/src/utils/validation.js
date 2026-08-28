@@ -110,6 +110,15 @@ export function validatePassword(raw) {
   return "";
 }
 
+/** The six-digit code emailed at sign-up and sign-in. */
+export function validateOtpCode(raw) {
+  const value = (raw || "").trim();
+  if (!value) return "Enter the code we emailed you.";
+  if (!/^\d+$/.test(value)) return "The code is 6 digits.";
+  if (value.length !== 6) return "The code is 6 digits.";
+  return "";
+}
+
 /**
  * The second field on the reset page. Checked separately from the password
  * rules so "too short" and "doesn't match" can't shout at once.

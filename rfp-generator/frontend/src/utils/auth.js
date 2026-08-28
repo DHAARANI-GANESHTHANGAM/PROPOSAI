@@ -26,14 +26,31 @@ async function postJson(path, body) {
   return res.json();
 }
 
-async function submitCredentials(path, email, password) {
-  const data = await postJson(`/api/auth/${path}`, { email, password });
+/**
+ * Step 1 of both flows. Neither returns a session — they return
+ * { otp_required, purpose, email, message } and the code goes out by email.
+ * Sign-up creates no account until the code is verified.
+ */
+export const signup = (email, password) =>
+  postJson("/api/auth/signup", { email, password });
+export const login = (email, password) =>
+  postJson("/api/auth/login", { email, password });
+
+/** Step 2: the code is exchanged for the JWT. */
+async function completeChallenge(path, email, code) {
+  const data = await postJson(path, { email, code });
   setToken(data.access_token);
   return data.user;
 }
 
-export const signup = (email, password) => submitCredentials("signup", email, password);
-export const login  = (email, password) => submitCredentials("login", email, password);
+export const verifySignup = (email, code) =>
+  completeChallenge("/api/auth/signup/verify", email, code);
+export const verifyLogin = (email, code) =>
+  completeChallenge("/api/auth/login/verify", email, code);
+
+/** purpose is "signup" or "login" — the backend rate-limits this. */
+export const resendOtp = (email, purpose) =>
+  postJson("/api/auth/otp/resend", { email, purpose });
 
 /**
  * Asks for a reset link. Resolves the same way whether or not the address is

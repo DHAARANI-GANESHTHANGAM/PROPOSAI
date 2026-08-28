@@ -72,6 +72,95 @@ def _reset_email_body(reset_link: str, ttl_minutes: int) -> tuple[str, str]:
     return html, text
 
 
+def is_configured() -> bool:
+    """True when a real send is possible. False means dev mode (log only)."""
+    api_key, sender_email, _ = _config()
+    return bool(api_key and sender_email)
+
+
+def _otp_email_body(code: str, purpose: str, ttl_minutes: int) -> tuple[str, str]:
+    """Returns (html, plain_text) for a one-time code."""
+    reason = (
+        "finish creating your ProposAI account"
+        if purpose == "signup"
+        else "sign in to ProposAI"
+    )
+
+    text = (
+        f"Your ProposAI verification code is {code}\n\n"
+        f"Enter it to {reason}. The code expires in {ttl_minutes} minutes.\n\n"
+        "If you didn't request this, ignore this email — nobody can get in "
+        "without the code."
+    )
+    html = f"""\
+<div style="font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;
+            background:#0a0a0f;padding:32px;color:#e6e6f0;">
+  <div style="max-width:480px;margin:0 auto;background:#111118;border:1px solid #1e1e2e;
+              border-radius:14px;padding:32px;">
+    <div style="font-size:20px;font-weight:700;color:#ffffff;margin-bottom:24px;">
+      Propos<span style="color:#6366f1;">AI</span>
+    </div>
+    <p style="font-size:15px;line-height:1.6;margin:0 0 20px;">
+      Enter this code to {reason}:
+    </p>
+    <div style="font-size:34px;font-weight:700;letter-spacing:10px;color:#ffffff;
+                background:#0d0d14;border:1px solid #1e1e2e;border-radius:10px;
+                padding:18px;text-align:center;margin-bottom:20px;">
+      {code}
+    </div>
+    <p style="font-size:13.5px;line-height:1.6;color:#9a9ab0;margin:0;">
+      The code expires in <strong>{ttl_minutes} minutes</strong>.
+    </p>
+    <p style="font-size:12.5px;line-height:1.6;color:#8a8a9e;margin:20px 0 0;">
+      If you didn't request this, ignore this email — nobody can get in without
+      the code.
+    </p>
+  </div>
+</div>"""
+    return html, text
+
+
+async def send_otp_email(
+    to_email: str, code: str, purpose: str, ttl_minutes: int
+) -> bool:
+    """
+    Emails a one-time code. Returns True when the provider accepted it.
+
+    Unlike the reset link, the caller DOES care whether this succeeded: if the
+    code never arrives the user simply cannot get in, so a failure is surfaced
+    rather than swallowed.
+    """
+    api_key, sender_email, sender_name = _config()
+
+    if not api_key or not sender_email:
+        print(
+            "[WARN] BREVO_API_KEY/BREVO_SENDER_EMAIL not set - no email sent.\n"
+            f"       One-time code for {to_email} ({purpose}): {code}"
+        )
+        return False
+
+    html, text = _otp_email_body(code, purpose, ttl_minutes)
+    payload = {
+        "sender": {"name": sender_name, "email": sender_email},
+        "to": [{"email": to_email}],
+        "subject": f"{code} is your ProposAI verification code",
+        "htmlContent": html,
+        "textContent": text,
+    }
+
+    try:
+        await asyncio.to_thread(_post, api_key, payload)
+        print(f"[OK] Verification code sent to {to_email} ({purpose})")
+        return True
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", "replace")[:500]
+        print(f"[ERROR] Brevo rejected the code email ({e.code}): {detail}")
+    except Exception as e:
+        print(f"[ERROR] Could not send the code email: {type(e).__name__}: {e}")
+
+    return False
+
+
 def _post(api_key: str, payload: dict) -> None:
     request = urllib.request.Request(
         BREVO_API_URL,

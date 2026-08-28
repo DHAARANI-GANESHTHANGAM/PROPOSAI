@@ -4,7 +4,7 @@ import traceback
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from routers import rfp, history, auth, profile
+from routers import rfp, history, auth, profile, export
 from database.mongodb import connect_to_mongo, close_mongo_connection
 
 
@@ -58,6 +58,7 @@ app.include_router(rfp.router, prefix="/api")
 app.include_router(history.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
 app.include_router(profile.router, prefix="/api")
+app.include_router(export.router, prefix="/api")
 
 @app.get("/")
 def root():

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import jsPDF from "jspdf";
-import { authFetch } from "../utils/auth";
+import { authFetch, getCompanyProfile } from "../utils/auth";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -17,6 +17,8 @@ export default function Response() {
   const [saving, setSaving]             = useState(false);
   const [saveError, setSaveError]       = useState("");
   const [winScore, setWinScore]         = useState(null);
+  const [exporting, setExporting]       = useState(false);
+  const [companyName, setCompanyName]   = useState("");
   const navigate                        = useNavigate();
 
   useEffect(() => {
@@ -28,6 +30,52 @@ export default function Response() {
     if (parsed.win_score) setWinScore(parsed.win_score);
     if (parsed.rfp_text) setRfpText(parsed.rfp_text);
   }, [navigate]);
+
+  useEffect(() => {
+    // Only for naming and titling the export; a failure here is harmless.
+    getCompanyProfile()
+      .then((profile) => setCompanyName(profile?.companyName || ""))
+      .catch(() => {});
+  }, []);
+
+  const exportDocx = async () => {
+    if (exporting) return;
+    setExporting(true);
+    setSaveError("");
+    try {
+      const res = await authFetch("/api/export/docx", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          body: edited,
+          company_name: companyName,
+          source_filename: result?.filename || "",
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.detail || `Could not build the Word file (${res.status})`);
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const stem = companyName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+      link.href = url;
+      link.download = stem ? `${stem}-proposal.docx` : "proposal.docx";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setSaveError(err.message);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const exportPDF = () => {
     const doc = new jsPDF();
@@ -129,6 +177,14 @@ export default function Response() {
             cursor: saving || saved ? "default" : "pointer",
             opacity: saving ? 0.7 : 1 }}>
             {saving ? "Saving..." : saved ? "✅ Saved" : "💾 Save"}
+          </button>
+          <button onClick={exportDocx} disabled={exporting} style={{
+            padding: "9px 16px", background: "#111118",
+            border: "1px solid #2e2e3e", borderRadius: "8px",
+            color: exporting ? "#555" : "#ccc", fontSize: "13px",
+            fontWeight: "500", fontFamily: "inherit",
+            cursor: exporting ? "default" : "pointer" }}>
+            {exporting ? "Building…" : "📝 Export Word"}
           </button>
           <button onClick={exportPDF} style={{
             padding: "9px 16px", background: "#6366f1",
